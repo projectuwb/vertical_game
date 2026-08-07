@@ -112,4 +112,32 @@ describe('Pool', () => {
     pool.release(a!);
     expect(() => pool.release(a!)).toThrow();
   });
+
+  it('get() returns the active item at an index, and rejects out-of-range indices', () => {
+    const pool = makePool(3);
+    pool.acquire();
+    pool.acquire();
+    expect(pool.get(0).id).toBe(0);
+    expect(pool.get(1).id).toBe(1);
+    expect(() => pool.get(2)).toThrow();
+    expect(() => pool.get(-1)).toThrow();
+  });
+
+  it('get() supports safe backward-iteration-with-release (the projectile-expiry pattern)', () => {
+    const pool = makePool(5);
+    for (let i = 0; i < 5; i++) pool.acquire();
+
+    const visited: number[] = [];
+    for (let i = pool.activeCount - 1; i >= 0; i--) {
+      const item = pool.get(i);
+      visited.push(item.id);
+      if (item.id % 2 === 0) pool.release(item);
+    }
+
+    expect(visited.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+    expect(pool.activeCount).toBe(2);
+    const remaining: number[] = [];
+    pool.forEachActive((item) => remaining.push(item.id));
+    expect(remaining.sort((a, b) => a - b)).toEqual([1, 3]);
+  });
 });

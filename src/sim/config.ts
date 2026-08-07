@@ -249,6 +249,17 @@ const balance = {
     deathsWithin8sOfGateMaxFraction: 0.12,
     strategyDominanceMaxFraction: 0.2,
   },
+
+  // Pool capacities (TECH_SPEC.md §5) — engineering/perf budget numbers rather than
+  // GAME_DESIGN.md ones, but still tunable and still exclusively /sim's concern, so they
+  // live here too rather than becoming untracked literals in projectiles.ts etc.
+  pools: {
+    projectileCapacity: 2048,
+    blotCapacity: 1200,
+    strokeCapacity: 999,
+    particleCapacity: 600,
+    floatingNumberCapacity: 64,
+  },
 } as const;
 
 /** Every gameplay-tunable number in the game. Frozen — sweeps build overridden copies, never mutate this. */

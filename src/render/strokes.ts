@@ -8,6 +8,8 @@ import { project, type ProjectedPoint } from './projection.js';
 import { PALETTE } from './palette.js';
 import { BALANCE } from '../sim/config.js';
 import { classifyForRender, computeFormationSlot, type LineState } from '../sim/line.js';
+import type { Pool } from '../core/pool.js';
+import type { Projectile } from '../sim/projectiles.js';
 import type { StrokeClass } from '../sim/stroke.js';
 
 const CLASS_COLOR: Record<StrokeClass, string> = {
@@ -216,4 +218,45 @@ function drawStipple(
     ctx.arc(x, y, STIPPLE_DOT_RADIUS_PX, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+// Render-only cosmetic constants for projectiles — not gameplay balance.
+const PROJECTILE_BASE_SIZE_U = 0.16;
+const PROJECTILE_HEIGHT_U = 0.15;
+
+/**
+ * Per-class projectile silhouettes (GAME_DESIGN.md §4): Hane a small fast dot, Tome a
+ * heavy slow blob, Harai a thin piercing line. Draws every active pooled projectile —
+ * cheap even at the pool's full 2048 capacity since Canvas 2D fills are trivial at this
+ * size, and in practice concurrent count is bounded by class range/speed/cap anyway.
+ */
+export function drawProjectiles(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  pool: Pool<Projectile>,
+): void {
+  pool.forEachActive((p) => {
+    const ground = project(p.x, PROJECTILE_HEIGHT_U, p.z, params);
+    const pxSize = Math.max(1.5, PROJECTILE_BASE_SIZE_U * ground.scale * params.unit);
+    ctx.fillStyle = CLASS_COLOR[p.class];
+
+    if (p.class === 'tome') {
+      ctx.beginPath();
+      ctx.arc(ground.screenX, ground.screenY, pxSize * 1.7, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.class === 'harai') {
+      const halfWidth = pxSize * 0.28;
+      const halfLength = pxSize * 2.2;
+      ctx.fillRect(
+        ground.screenX - halfWidth,
+        ground.screenY - halfLength,
+        halfWidth * 2,
+        halfLength * 2,
+      );
+    } else {
+      ctx.beginPath();
+      ctx.arc(ground.screenX, ground.screenY, pxSize * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
 }

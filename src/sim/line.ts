@@ -147,3 +147,44 @@ export function classifyForRender(totalCount: number): RenderClassification {
     hasDensityBlock: true,
   };
 }
+
+// --- Bridge to firing (Task 2.3, src/sim/projectiles.ts) ---
+
+export type ClassCounts = Record<StrokeClass, number>;
+
+function emptyClassCounts(): ClassCounts {
+  return { hane: 0, tome: 0, harai: 0 };
+}
+
+/** Splits the Line into front-row (fires at full rate) vs everyone else (55% each, GAME_DESIGN.md §5). */
+export function computeRowClassCounts(line: LineState): { front: ClassCounts; back: ClassCounts } {
+  const front = emptyClassCounts();
+  const back = emptyClassCounts();
+  const rowSize = BALANCE.line.rowSize;
+  for (let i = 0; i < line.strokes.length; i++) {
+    const stroke = line.strokes[i] as LineStroke;
+    (i < rowSize ? front : back)[stroke.class]++;
+  }
+  return { front, back };
+}
+
+export interface WorldPosition {
+  readonly x: number;
+  readonly z: number;
+}
+
+/** World-space muzzle position of every front-row Stroke, grouped by class, for projectiles.ts's updateFiring(). */
+export function computeFrontRowSourcePositions(
+  line: LineState,
+  brushX: number,
+  brushZ: number,
+): Record<StrokeClass, WorldPosition[]> {
+  const sources: Record<StrokeClass, WorldPosition[]> = { hane: [], tome: [], harai: [] };
+  const count = Math.min(BALANCE.line.rowSize, line.strokes.length);
+  for (let i = 0; i < count; i++) {
+    const stroke = line.strokes[i] as LineStroke;
+    const slot = computeFormationSlot(i);
+    sources[stroke.class].push({ x: brushX + slot.lateralOffset, z: brushZ + slot.depthOffset });
+  }
+  return sources;
+}

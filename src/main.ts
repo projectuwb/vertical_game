@@ -10,6 +10,8 @@ import {
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
 import {
+  computeFrontRowSourcePositions,
+  computeRowClassCounts,
   createLine,
   stepCriticallyDamped,
   type DampedFollower1D,
@@ -17,10 +19,16 @@ import {
 } from './sim/line.js';
 import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
+import {
+  createFiringAccumulators,
+  createProjectilePool,
+  updateFiring,
+  updateProjectileMotion,
+} from './sim/projectiles.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
 import { drawRoad, drawSkyWater } from './render/road.js';
-import { drawLine } from './render/strokes.js';
+import { drawLine, drawProjectiles } from './render/strokes.js';
 import { OffscreenLayers } from './render/layers.js';
 import { PALETTE } from './render/palette.js';
 
@@ -70,6 +78,8 @@ function bootstrap(): void {
   let holding = false;
   let scrollDistance = 0;
   let line: LineState = createLine(BALANCE.line.startCount, 'hane');
+  const projectilePool = createProjectilePool();
+  const firingAccumulators = createFiringAccumulators();
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
@@ -78,6 +88,12 @@ function bootstrap(): void {
       follower = stepCriticallyDamped(follower, targetX, dtFixed, LATERAL_DAMPING_TAU_S);
       holding = frame.holding;
       scrollDistance += BALANCE.forwardSpeed.baseUPerS * dtFixed;
+
+      const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
+      const { front, back } = computeRowClassCounts(line);
+      const sources = computeFrontRowSourcePositions(line, brushX, BRUSH_Z);
+      updateFiring(firingAccumulators, projectilePool, dtFixed, front, back, sources);
+      updateProjectileMotion(projectilePool, dtFixed);
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();
@@ -104,6 +120,7 @@ function bootstrap(): void {
       layers.clearActors();
       const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
+      drawProjectiles(layers.actorsCtx, params, projectilePool);
 
       const marker = project(brushX, BRUSH_MARKER_RADIUS_U, BRUSH_MARKER_Z, params);
       layers.actorsCtx.beginPath();

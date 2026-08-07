@@ -3,11 +3,14 @@ import {
   addStroke,
   classifyForRender,
   computeFormationSlot,
+  computeFrontRowSourcePositions,
+  computeRowClassCounts,
   createLine,
   removeStrokesFromFront,
   setLineCount,
   stepCriticallyDamped,
   type DampedFollower1D,
+  type LineState,
 } from '../../src/sim/line.js';
 import { BALANCE } from '../../src/sim/config.js';
 
@@ -178,5 +181,58 @@ describe('classifyForRender', () => {
       expect(result.hasDensityBlock).toBe(true);
       expect(result.individualCount).toBe(BALANCE.line.individualRowsDrawn * BALANCE.line.rowSize);
     }
+  });
+});
+
+describe('computeRowClassCounts', () => {
+  it('splits exactly at the front row (first 5 indices)', () => {
+    const line: LineState = {
+      strokes: [
+        { class: 'hane' },
+        { class: 'hane' },
+        { class: 'tome' },
+        { class: 'harai' },
+        { class: 'harai' },
+        { class: 'hane' }, // row 1 — "back"
+        { class: 'tome' }, // row 1 — "back"
+      ],
+    };
+    const { front, back } = computeRowClassCounts(line);
+    expect(front).toEqual({ hane: 2, tome: 1, harai: 2 });
+    expect(back).toEqual({ hane: 1, tome: 1, harai: 0 });
+  });
+
+  it('a Line smaller than one row has an empty back', () => {
+    const line = createLine(3, 'hane');
+    const { front, back } = computeRowClassCounts(line);
+    expect(front).toEqual({ hane: 3, tome: 0, harai: 0 });
+    expect(back).toEqual({ hane: 0, tome: 0, harai: 0 });
+  });
+});
+
+describe('computeFrontRowSourcePositions', () => {
+  it('only includes front-row Strokes, one source per Stroke', () => {
+    const line: LineState = {
+      strokes: [
+        { class: 'hane' },
+        { class: 'hane' },
+        { class: 'tome' },
+        { class: 'harai' },
+        { class: 'harai' },
+        { class: 'hane' }, // row 1 — excluded
+      ],
+    };
+    const sources = computeFrontRowSourcePositions(line, 0, 0);
+    expect(sources.hane).toHaveLength(2);
+    expect(sources.tome).toHaveLength(1);
+    expect(sources.harai).toHaveLength(2);
+  });
+
+  it('offsets every source by the given Brush world position plus its formation slot', () => {
+    const line = createLine(1, 'hane');
+    const slot = computeFormationSlot(0);
+    const sources = computeFrontRowSourcePositions(line, 3.5, 12);
+    expect(sources.hane[0]?.x).toBeCloseTo(3.5 + slot.lateralOffset, 9);
+    expect(sources.hane[0]?.z).toBeCloseTo(12 + slot.depthOffset, 9);
   });
 });

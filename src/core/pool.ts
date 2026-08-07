@@ -63,6 +63,20 @@ export class Pool<T extends PoolItem> {
     this.active = 0;
   }
 
+  /**
+   * Direct access to the active item at `index` (0 = front of the active set). For
+   * backward-iteration-with-release patterns, where forEachActive's guarantee that the
+   * active set doesn't change mid-iteration isn't what you want (e.g. despawning
+   * projectiles past their range every step) — release()'s swap-remove is safe to call
+   * mid-loop only when iterating from `activeCount - 1` down to `0`.
+   */
+  get(index: number): T {
+    if (index < 0 || index >= this.active) {
+      throw new Error('Pool.get: index out of range for the active set');
+    }
+    return this.items[index]!;
+  }
+
   /** Iterates active items only, front-to-back. Plain indexed loop — no allocation. */
   forEachActive(fn: (item: T, index: number) => void): void {
     for (let i = 0; i < this.active; i++) {
