@@ -9,11 +9,18 @@ import {
 } from './core/loop.js';
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
-import { stepCriticallyDamped, type DampedFollower1D } from './sim/line.js';
+import {
+  createLine,
+  stepCriticallyDamped,
+  type DampedFollower1D,
+  type LineState,
+} from './sim/line.js';
+import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
 import { drawRoad, drawSkyWater } from './render/road.js';
+import { drawLine } from './render/strokes.js';
 import { OffscreenLayers } from './render/layers.js';
 import { PALETTE } from './render/palette.js';
 
@@ -21,10 +28,22 @@ const BRUSH_CLAMP = BALANCE.lane.brushClampX;
 const LATERAL_DAMPING_TAU_S = BALANCE.control.dampingTimeConstantS;
 /** The Brush's fixed world-space depth: the road scrolls past it, not the other way round. */
 const BRUSH_Z = 0;
-const BRUSH_MARKER_RADIUS_U = 0.35;
+/** Slightly ahead of the Line's own front-row bulge, so the Brush reads as the leader. */
+const BRUSH_MARKER_Z = BRUSH_Z + 0.5;
+const BRUSH_MARKER_RADIUS_U = 0.3;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** Task 2.2's debug control: mixed-class Lines at fixed sizes, to check formation
+ *  layout and density-block behaviour independent of real recruitment (Task 2.5). */
+function buildDebugLine(count: number): LineState {
+  const classes: StrokeClass[] = ['hane', 'tome', 'harai'];
+  const strokes = Array.from({ length: count }, (_, i) => ({
+    class: classes[i % classes.length] as StrokeClass,
+  }));
+  return { strokes };
 }
 
 function bootstrap(): void {
@@ -46,12 +65,11 @@ function bootstrap(): void {
   let lastCssHeight = initialMetrics.cssHeight;
   let lastDpr = initialMetrics.devicePixelRatio;
 
-  // Stand-in for the real Brush/Line entity (Task 2.2) — proves lateral control end to
-  // end (Task 1.5) through the now-real projection (Task 2.1) rather than a flat mapping.
   let targetX = 0;
   let follower: DampedFollower1D = { position: 0, velocity: 0 };
   let holding = false;
   let scrollDistance = 0;
+  let line: LineState = createLine(BALANCE.line.startCount, 'hane');
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
@@ -84,12 +102,10 @@ function bootstrap(): void {
       drawRoad(layers.roadTrailCtx, metrics.cssWidth, metrics.cssHeight, params, scrollDistance);
 
       layers.clearActors();
-      const marker = project(
-        clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP),
-        BRUSH_MARKER_RADIUS_U,
-        BRUSH_Z,
-        params,
-      );
+      const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
+      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
+
+      const marker = project(brushX, BRUSH_MARKER_RADIUS_U, BRUSH_MARKER_Z, params);
       layers.actorsCtx.beginPath();
       layers.actorsCtx.arc(
         marker.screenX,
@@ -98,7 +114,7 @@ function bootstrap(): void {
         0,
         Math.PI * 2,
       );
-      layers.actorsCtx.fillStyle = holding ? PALETTE.vermilion : PALETTE.jade;
+      layers.actorsCtx.fillStyle = holding ? PALETTE.vermilion : PALETTE.bone;
       layers.actorsCtx.fill();
 
       layers.compositeInto(viewport.ctx);
@@ -112,6 +128,20 @@ function bootstrap(): void {
   const debugRequested = new URLSearchParams(window.location.search).get('debug') === '1';
   if (debugRequested) {
     mountDebugOverlay(loop, app);
+
+    const debugLineSizes: Record<string, number> = {
+      Digit1: 1,
+      Digit2: 5,
+      Digit3: 37,
+      Digit4: 120,
+      Digit5: 400,
+    };
+    document.addEventListener('keydown', (e) => {
+      const size = debugLineSizes[e.code];
+      if (size !== undefined) {
+        line = buildDebugLine(size);
+      }
+    });
   }
 }
 

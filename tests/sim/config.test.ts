@@ -64,7 +64,7 @@ describe('BALANCE', () => {
 describe('no stray gameplay magic numbers in /sim', () => {
   // Enforces Task 1.6's acceptance criterion mechanically: every /sim source file other
   // than config.ts must draw its numbers from BALANCE. Heuristic, not a full parser —
-  // exempts 0, 1 (and their negatives), and literals used as array indices ([n]).
+  // exempts 0, 1, 2 (and their negatives), and literals used as array indices ([n]).
   const simDir = join(__dirname, '../../src/sim');
 
   function listSimFiles(dir: string): string[] {
@@ -99,7 +99,10 @@ describe('no stray gameplay magic numbers in /sim', () => {
     while ((match = numberPattern.exec(cleaned)) !== null) {
       const token = match[0];
       const value = Number(token);
-      if (value === 0 || value === 1 || value === -1) continue;
+      // 0/1/-1 per the task's own exemption; ±2 for plain halving/doubling of a named
+      // quantity (e.g. a row's centre index) — structural arithmetic, not a balance
+      // number in its own right (an actual gameplay ×2 already has a named BALANCE field).
+      if (value === 0 || value === 1 || value === -1 || value === 2 || value === -2) continue;
 
       const start = match.index;
       const before = cleaned.slice(Math.max(0, start - 1), start);

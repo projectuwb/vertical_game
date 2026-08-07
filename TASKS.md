@@ -18,7 +18,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 ## Phase 2 — The run
 
 - [x] **2.1 Projection and road.** Perspective projection per `TECH_SPEC.md` §5, layered canvases, scrolling road with markings, water, horizon, vignette. Palette from `GAME_DESIGN.md` §12. *Done when: the road scrolls at 22 u/s with no shimmer or seam, and resizing preserves proportions across 9:21 to 3:4.*
-- [ ] **2.2 The Brush and the Line.** Formation layout, arc, rows of 5, growth and loss from the front, density blocks above 60. *Done when: a debug control setting N to 1/5/37/120/400 produces correct, readable formations at 60fps.*
+- [x] **2.2 The Brush and the Line.** Formation layout, arc, rows of 5, growth and loss from the front, density blocks above 60. *Done when: a debug control setting N to 1/5/37/120/400 produces correct, readable formations at 60fps.*
 - [ ] **2.3 Strokes and firing.** Three classes with the stats in §4, projectile pools, per-class visuals and behaviour (splash, pierce), row-scaled DPS with the visible-projectile cap. *Done when: unit tests confirm DPS scaling and armour multipliers, and the cap holds at N=400.*
 - [ ] **2.4 The Blot.** All six unit types, marching behaviour, contact resolution, mass rendering above 150. *Done when: 900 units render at 60fps and contact kills resolve exactly per §5.*
 - [ ] **2.5 Slips.** Slip runs, +1/+5/+25 variants, class assignment with the least-held weighting, shoot-to-recruit with the runner-joins-the-back animation. *Done when: shooting a Slip reliably adds a Stroke of that class within 1.2s and the class weighting is unit-tested.*
