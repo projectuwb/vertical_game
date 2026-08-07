@@ -6,3 +6,6 @@ no waiting for approval.
 Format:
 `- [YYYY-MM-DD] <decision> — <one-clause reason>`
 
+- [2026-08-07] `npm run sim`/`npm run perf` compile via a dedicated `tsconfig.cli.json` (NodeNext) + plain `node`, not `tsx` — keeps devDependencies to exactly the `TECH_SPEC.md` §2 list.
+- [2026-08-07] Vitest runs in the `node` test environment, not `jsdom` — `/sim` and `/meta` (the tested code) are headless by rule, and `jsdom` isn't in the §2 dependency list.
+

@@ -1,0 +1,5 @@
+dist
+dist-cli
+android
+node_modules
+public/sw.js

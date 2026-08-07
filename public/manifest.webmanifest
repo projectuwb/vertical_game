@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "scope": "/",
+  "start_url": "/",
+  "name": "Inkfall",
+  "short_name": "Inkfall",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#2A3440",
+  "background_color": "#171E26",
+  "icons": []
+}
