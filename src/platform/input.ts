@@ -2,6 +2,8 @@
 // of this module is an immutable InputFrame per fixed step — the sim consumes that and
 // never touches the DOM, pointer, or keyboard directly.
 
+import { BALANCE } from '../sim/config.js';
+
 /**
  * `lateralDelta` is already in world units for this fixed step (both touch-drag pixels
  * and keyboard rate are converted here, in /platform) — the sim just needs "how far did
@@ -16,10 +18,8 @@ export interface InputFrame {
   readonly dtFixed: number;
 }
 
-/** GAME_DESIGN.md §3: "drag-relative lateral input... finger delta × 0.028 world-units-per-pixel." */
-const TOUCH_UNITS_PER_PIXEL = 0.028;
-/** GAME_DESIGN.md §3: "Keyboard: A/D or ←/→ at 14 u/s for desktop play." */
-const KEYBOARD_LATERAL_SPEED = 14;
+const TOUCH_UNITS_PER_PIXEL = BALANCE.control.dragUnitsPerPixel;
+const KEYBOARD_LATERAL_SPEED = BALANCE.control.keyboardUPerS;
 
 export class InputSampler {
   private readonly target: HTMLElement;

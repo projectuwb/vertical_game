@@ -13,7 +13,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 - [x] **1.3 Determinism kit.** mulberry32, per-concern generator registry, `Math.random` lint ban, world-hash utility. *Done when: the determinism test in `TECH_SPEC.md` §12 exists and passes.*
 - [x] **1.4 Pools and events.** Typed object pools with no allocation on acquire/release; a tiny synchronous event bus for sim→render/audio signalling. *Done when: the allocation test passes.*
 - [x] **1.5 Viewport and input.** Portrait-first responsive canvas with device-pixel-ratio handling and safe-area insets; drag-relative lateral input per `GAME_DESIGN.md` §3, keyboard fallback, hold detection for Flourish. *Done when: dragging moves a debug marker with the specified damping on a phone-sized viewport, and input is delivered to the sim as `InputFrame` only.*
-- [ ] **1.6 Config object.** `/sim/config.ts` frozen `BALANCE` object containing every number in `GAME_DESIGN.md`, typed and commented with section references. *Done when: grepping `/sim` finds no numeric literals outside `config.ts` except 0, 1, and array indices.*
+- [x] **1.6 Config object.** `/sim/config.ts` frozen `BALANCE` object containing every number in `GAME_DESIGN.md`, typed and commented with section references. *Done when: grepping `/sim` finds no numeric literals outside `config.ts` except 0, 1, and array indices.*
 
 ## Phase 2 — The run
 
