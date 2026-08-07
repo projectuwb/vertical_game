@@ -43,4 +43,11 @@ export default tseslint.config(
       '@typescript-eslint/no-non-null-assertion': 'off',
     },
   },
+  {
+    // TECH_SPEC.md §13: "No non-null assertions outside pool internals."
+    files: ['src/core/pool.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
 );
