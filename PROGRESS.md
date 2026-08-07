@@ -10,10 +10,11 @@ Format:
 ## Current state
 
 - Phase: 1
-- Next task: 1.2
+- Next task: 1.3
 - Blockers: none
 
 ## Log
 
 - [2026-08-07] 1.1 — Scaffolded Vite+TS strict project: tsconfig (app + a NodeNext `tsconfig.cli.json` for the headless `sim`/`perf` CLIs), ESLint flat config with a `Math.random` ban outside `/render`, Prettier, Vitest (node env, no jsdom dep), full `/src` folder skeleton per `TECH_SPEC.md` §3 with placeholder modules, `vercel.json` headers, minimal `manifest.webmanifest`, `README.md`. `npm run verify` green. — Next session: real per-file implementations start with 1.2 (fixed-timestep loop); CLI scripts import only `/core`, `/sim`, `/meta`, `/balance` and must use explicit `.js` extensions in relative imports for NodeNext resolution to work under `npm run sim`/`npm run perf`.
+- [2026-08-07] 1.2 — `FixedStepLoop` in `src/core/loop.ts`: pure `advance(nowMs)` accumulator (no internal clock reads, so tests can feed fabricated timestamps), 60Hz fixed step, max 5 catch-up steps with remainder folded away on overrun, render alpha interpolation, pause/resume (resume re-primes `lastNowMs` so it doesn't burst-catch-up), `reset()`. `runInBrowser()` wraps it in `requestAnimationFrame`; `attachVisibilityAutoPause()` pauses on tab hidden; `mountDebugOverlay()` is a DOM-only fps/steps overlay gated behind `?debug=1` in `main.ts`. Determinism test drives 10,000 then 20,000 frames of exact fixed-dt length and asserts step count doesn't drift more than 1 step and the second identical-length segment matches the first — bit-exact equality against `N` isn't achievable with IEEE-754 timestamps at 1/60s, so the test asserts the property that actually matters (error doesn't compound). — Next session: `main.ts`'s `update`/`render` callbacks are still no-ops; they get wired to `/sim` and `/render` starting Task 2.1.
 

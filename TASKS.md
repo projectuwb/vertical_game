@@ -9,7 +9,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 ## Phase 1 — Foundation
 
 - [x] **1.1 Scaffold.** Vite + TS strict, ESLint flat config + Prettier, Vitest, folder skeleton per `TECH_SPEC.md` §3, `npm run verify` script, git init, first commit. *Done when: `npm run verify` passes on an empty project and the repo layout matches the spec.*
-- [ ] **1.2 Core loop.** Fixed-timestep accumulator at 60Hz, interpolated render, pause/resume, visibility handling, an FPS/step debug overlay behind a flag. *Done when: a test drives 10,000 steps and asserts exact step count and no drift; the overlay shows a steady 60 steps/s.*
+- [x] **1.2 Core loop.** Fixed-timestep accumulator at 60Hz, interpolated render, pause/resume, visibility handling, an FPS/step debug overlay behind a flag. *Done when: a test drives 10,000 steps and asserts exact step count and no drift; the overlay shows a steady 60 steps/s.*
 - [ ] **1.3 Determinism kit.** mulberry32, per-concern generator registry, `Math.random` lint ban, world-hash utility. *Done when: the determinism test in `TECH_SPEC.md` §12 exists and passes.*
 - [ ] **1.4 Pools and events.** Typed object pools with no allocation on acquire/release; a tiny synchronous event bus for sim→render/audio signalling. *Done when: the allocation test passes.*
 - [ ] **1.5 Viewport and input.** Portrait-first responsive canvas with device-pixel-ratio handling and safe-area insets; drag-relative lateral input per `GAME_DESIGN.md` §3, keyboard fallback, hold detection for Flourish. *Done when: dragging moves a debug marker with the specified damping on a phone-sized viewport, and input is delivered to the sim as `InputFrame` only.*
