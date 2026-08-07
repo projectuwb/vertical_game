@@ -159,7 +159,10 @@ const balance = {
     crust: { hp: 25, speedUPerS: 6, contactStrokeLoss: 3 },
     splitter: { hp: 12, speedUPerS: 9, spawnOnDeathCount: 3, spawnOffsetU: 1 },
     blotter: { hp: 8, speedUPerS: 5, stopDistanceU: 18, lobIntervalS: 2.2, contactStrokeLoss: 1 },
-    drifter: { hp: 6, speedUPerS: 10 },
+    // strafeUPerS isn't given a number in GAME_DESIGN.md ("strafes laterally, forcing
+    // you to lead your shots") — chosen at 40% of forward speed: fast enough to matter,
+    // slow enough not to look erratic. Logged in DECISIONS.md.
+    drifter: { hp: 6, speedUPerS: 10, strafeUPerS: 4 },
   },
 
   // §8.2 Seals (bosses)
@@ -259,6 +262,24 @@ const balance = {
     strokeCapacity: 999,
     particleCapacity: 600,
     floatingNumberCapacity: 64,
+  },
+
+  // Projectile-vs-Blot hit radius: not given a number anywhere in either spec (neither
+  // doc models collision as circle-vs-circle explicitly). 0.6u is comfortably larger
+  // than a Blot's smallest silhouette and smaller than the Line's row spacing (0.85u),
+  // so hits feel fair without adjacent-row splash-like false positives. Logged in
+  // DECISIONS.md.
+  collision: {
+    hitRadiusU: 0.6,
+  },
+
+  // Above this many active Blot, only those within massRenderDistanceU of the Brush
+  // draw with full individual detail; farther ones drop to a cheaper silhouette so a
+  // wave of hundreds still reads as "one advancing stain" (GAME_DESIGN.md §8.1) at 60fps
+  // (TECH_SPEC.md §5's "individuals within 30u, silhouetted mass beyond").
+  blotRender: {
+    massThresholdCount: 150,
+    massRenderDistanceU: 30,
   },
 } as const;
 

@@ -20,10 +20,16 @@ const CLASS_COLOR: Record<StrokeClass, string> = {
 
 // Render-only cosmetic constants — not gameplay balance, so not in /sim/config.ts.
 const SILHOUETTE_BASE_SIZE_U = 0.4;
-/** Density block never extends further back than this, regardless of overflow count —
- *  otherwise a very large Line's block would reach past the camera's near-clip plane
- *  and blow up in size instead of reading as "a mass of ink." */
-const MAX_BLOCK_DEPTH_U = 3.5;
+/**
+ * Density block never extends further back (toward the camera) than this, regardless
+ * of overflow count. The block always starts right behind row 3, only ~2.25u ahead of
+ * the camera itself (row depth is small — 0.75u/row — while the camera sits ~6.5u back)
+ * — so even a modest additional depth here pushes its near edge toward the projection's
+ * near-clip plane, where scale explodes and the block balloons to cover the whole
+ * screen instead of reading as a mass sitting near the Brush. 1.8u keeps its projected
+ * scale bounded to a reasonable size at any Line count.
+ */
+const MAX_BLOCK_DEPTH_U = 1.8;
 const BLOCK_LATERAL_PAD_U = 0.3;
 const STIPPLE_DOT_COUNT = 48;
 const STIPPLE_DOT_RADIUS_PX = 2.5;

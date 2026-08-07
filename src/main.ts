@@ -13,6 +13,7 @@ import {
   computeFrontRowSourcePositions,
   computeRowClassCounts,
   createLine,
+  removeStrokesFromFront,
   stepCriticallyDamped,
   type DampedFollower1D,
   type LineState,
@@ -25,10 +26,20 @@ import {
   updateFiring,
   updateProjectileMotion,
 } from './sim/projectiles.js';
+import {
+  BLOT_CLASSES,
+  createBlotPool,
+  resolveBlotDeaths,
+  resolveLineContact,
+  spawnBlot,
+  updateBlotMotion,
+} from './sim/blot.js';
+import { resolveProjectileBlotCollisions } from './sim/collision.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
 import { drawRoad, drawSkyWater } from './render/road.js';
 import { drawLine, drawProjectiles } from './render/strokes.js';
+import { drawBlot } from './render/blot.js';
 import { OffscreenLayers } from './render/layers.js';
 import { PALETTE } from './render/palette.js';
 
@@ -52,6 +63,20 @@ function buildDebugLine(count: number): LineState {
     class: classes[i % classes.length] as StrokeClass,
   }));
   return { strokes };
+}
+
+/** Task 2.4's debug control: a mixed-class wave spread across the lane and stacked back
+ *  into the distance, to check mass rendering and 60fps at up to 900 concurrent Blot. */
+function spawnDebugBlotWave(pool: ReturnType<typeof createBlotPool>, count: number): void {
+  const columns = 9;
+  for (let i = 0; i < count; i++) {
+    const col = i % columns;
+    const rowDepth = Math.floor(i / columns);
+    const x = (col - (columns - 1) / 2) * 0.9;
+    const z = 40 + rowDepth * 3;
+    const cls = BLOT_CLASSES[i % BLOT_CLASSES.length] as (typeof BLOT_CLASSES)[number];
+    spawnBlot(pool, cls, x, z);
+  }
 }
 
 function bootstrap(): void {
@@ -80,6 +105,7 @@ function bootstrap(): void {
   let line: LineState = createLine(BALANCE.line.startCount, 'hane');
   const projectilePool = createProjectilePool();
   const firingAccumulators = createFiringAccumulators();
+  const blotPool = createBlotPool();
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
@@ -94,6 +120,15 @@ function bootstrap(): void {
       const sources = computeFrontRowSourcePositions(line, brushX, BRUSH_Z);
       updateFiring(firingAccumulators, projectilePool, dtFixed, front, back, sources);
       updateProjectileMotion(projectilePool, dtFixed);
+
+      const lobsLanded = updateBlotMotion(blotPool, dtFixed, BRUSH_Z);
+      resolveProjectileBlotCollisions(projectilePool, blotPool);
+      resolveBlotDeaths(blotPool);
+      const strokesLostToContact = resolveLineContact(blotPool, BRUSH_Z);
+      const strokesLost = lobsLanded + strokesLostToContact;
+      if (strokesLost > 0) {
+        line = removeStrokesFromFront(line, strokesLost);
+      }
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();
@@ -119,6 +154,7 @@ function bootstrap(): void {
 
       layers.clearActors();
       const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
+      drawBlot(layers.actorsCtx, params, blotPool, BRUSH_Z);
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
       drawProjectiles(layers.actorsCtx, params, projectilePool);
 
@@ -153,10 +189,20 @@ function bootstrap(): void {
       Digit4: 120,
       Digit5: 400,
     };
+    const debugBlotWaveSizes: Record<string, number> = {
+      Digit6: 150,
+      Digit7: 400,
+      Digit8: 900,
+    };
     document.addEventListener('keydown', (e) => {
-      const size = debugLineSizes[e.code];
-      if (size !== undefined) {
-        line = buildDebugLine(size);
+      const lineSize = debugLineSizes[e.code];
+      if (lineSize !== undefined) {
+        line = buildDebugLine(lineSize);
+      }
+      const waveSize = debugBlotWaveSizes[e.code];
+      if (waveSize !== undefined) {
+        blotPool.releaseAll();
+        spawnDebugBlotWave(blotPool, waveSize);
       }
     });
   }
