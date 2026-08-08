@@ -31,6 +31,7 @@ import { computeProjectionParams } from './render/camera.js';
 import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater } from './render/road.js';
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
+import { drawPhraseEffects } from './render/effects.js';
 import { OffscreenLayers } from './render/layers.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
@@ -50,6 +51,13 @@ function buildDebugLine(count: number): LineState {
     class: classes[i % classes.length] as StrokeClass,
   }));
   return { strokes };
+}
+
+/** Task 2.9's debug control: a pure-class Line, front row and all — the fastest way to
+ *  check Phrase detection/effects/5-of-a-kind escalation without waiting on real Slip
+ *  recruitment to happen to line up 3+ of one class at the front. */
+function buildDebugPureLine(cls: StrokeClass, count: number): LineState {
+  return { strokes: Array.from({ length: count }, () => ({ class: cls })) };
 }
 
 /** Task 2.4's debug control: a mixed-class wave spread across the lane and stacked back
@@ -156,6 +164,7 @@ function bootstrap(): void {
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line);
       drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, world.projectilePool);
+      drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);
       drawBrush(layers.actorsCtx, params, brushX, BRUSH_Z, world.wetness, world.flourish, world.timeS);
 
       layers.compositeInto(viewport.ctx);
@@ -207,6 +216,15 @@ function bootstrap(): void {
       }
       if (e.code === 'KeyR') {
         world = createWorld(Date.now());
+      }
+      if (e.code === 'KeyJ') {
+        world.line = buildDebugPureLine('hane', BALANCE.phrase.rowSize);
+      }
+      if (e.code === 'KeyK') {
+        world.line = buildDebugPureLine('tome', BALANCE.phrase.rowSize);
+      }
+      if (e.code === 'KeyL') {
+        world.line = buildDebugPureLine('harai', BALANCE.phrase.rowSize);
       }
     });
   }

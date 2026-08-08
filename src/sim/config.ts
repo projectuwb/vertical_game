@@ -8,6 +8,12 @@
 // Percentages are stored as fractional multipliers (0.04, not 4), so every "per level"
 // or "bonus" field can be applied as `base * (1 + n * field)` without a stray /100.
 
+/** GAME_DESIGN.md gives Phrase spreads in degrees (e.g. §4's "45° spread"); /sim's own
+ *  math wants radians. A bare `/ 180` in any other /sim file would trip the
+ *  no-magic-numbers scanner above, so the conversion factor lives here once, in the one
+ *  file the scanner exempts. */
+export const DEG_TO_RAD = Math.PI / 180;
+
 function deepFreeze<T>(value: T): T {
   if (value !== null && (typeof value === 'object' || typeof value === 'function')) {
     for (const key of Object.getOwnPropertyNames(value)) {

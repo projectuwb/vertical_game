@@ -37,7 +37,7 @@ const BLOCK_LATERAL_PAD_U = 0.3;
 const STIPPLE_DOT_COUNT = 48;
 const STIPPLE_DOT_RADIUS_PX = 2.5;
 
-type Quad = readonly [ProjectedPoint, ProjectedPoint, ProjectedPoint, ProjectedPoint];
+export type Quad = readonly [ProjectedPoint, ProjectedPoint, ProjectedPoint, ProjectedPoint];
 
 export function drawLine(
   ctx: CanvasRenderingContext2D,
@@ -156,7 +156,7 @@ function drawDensityBlock(
   drawStipple(ctx, corners, counts, dominant);
 }
 
-function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): void {
+export function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): void {
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(corners[0].screenX, corners[0].screenY);

@@ -85,6 +85,7 @@ import {
   stepFlourishInput,
   type FlourishState,
 } from './flourish.js';
+import { createPhraseState, stepPhrases, type PhraseState } from './phrases.js';
 import {
   computeComposition,
   computeSlipBudgetPer100U,
@@ -145,6 +146,7 @@ export interface World {
 
   wetness: WetnessState;
   flourish: FlourishState;
+  phrase: PhraseState;
   /** input.holding from the previous step — flourish.ts's charge/release state machine
    *  is edge-triggered (a hold *starting*, a hold *ending*), so it needs this to detect
    *  the transition rather than just the current value. */
@@ -189,6 +191,7 @@ export function createWorld(seed: number): World {
 
     wetness: createWetnessState(),
     flourish: createFlourishState(),
+    phrase: createPhraseState(),
     previousHolding: false,
 
     blotKilled: 0,
@@ -265,7 +268,13 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   const isFiring = !input.holding && world.line.strokes.length > 0;
   world.wetness = stepWetness(world.wetness, dtFixed, isFiring);
 
-  const lobsLanded = updateBlotMotion(world.blotPool, dtFixed, BRUSH_Z);
+  // Phrases (GAME_DESIGN.md §4) run off the same front-row counts firing just used, and
+  // — like Flourish's sweep — before this step's own resolveBlotDeaths, so a Phrase
+  // kill is counted exactly like any other, not deferred to next step.
+  const phraseResult = stepPhrases(world.phrase, dtFixed, world.timeS, front, world.blotPool, brushX, BRUSH_Z);
+  world.phrase = phraseResult.state;
+
+  const lobsLanded = updateBlotMotion(world.blotPool, dtFixed, BRUSH_Z, world.timeS);
   resolveProjectileBlotCollisions(world.projectilePool, world.blotPool);
   world.blotKilled += resolveBlotDeaths(world.blotPool);
   const strokesLostToContact = resolveLineContact(world.blotPool, BRUSH_Z);

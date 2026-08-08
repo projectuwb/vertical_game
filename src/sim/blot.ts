@@ -27,6 +27,10 @@ export interface Blot extends PoolItem {
   lobTimer: number;
   /** Blotter only: true once it has reached its stop distance and holds position. */
   stopped: boolean;
+  /** Tome Phrase's Press staggers on hit (GAME_DESIGN.md §4/§5) — a sim-time deadline
+   *  rather than a countdown, so it composes with pause/catch-up the same way every
+   *  other timestamp field in /sim does. 0 = never staggered. */
+  staggeredUntilS: number;
 }
 
 export function createBlotPool(): Pool<Blot> {
@@ -39,6 +43,7 @@ export function createBlotPool(): Pool<Blot> {
     strafeDirection: 1,
     lobTimer: 0,
     stopped: false,
+    staggeredUntilS: 0,
   }));
 }
 
@@ -53,7 +58,12 @@ export function spawnBlot(pool: Pool<Blot>, cls: BlotClass, x: number, z: number
   blot.strafeDirection = 1;
   blot.lobTimer = 0;
   blot.stopped = false;
+  blot.staggeredUntilS = 0;
   return blot;
+}
+
+export function isBlotStaggered(b: Blot, timeS: number): boolean {
+  return b.staggeredUntilS > timeS;
 }
 
 const LANE_HALF_WIDTH = BALANCE.lane.halfWidth;
@@ -61,14 +71,18 @@ const LANE_HALF_WIDTH = BALANCE.lane.halfWidth;
 /**
  * Marches every active Blot toward the Brush (decreasing z). Drifter also strafes
  * laterally, bouncing off the lane edges; Blotter holds at its stop distance and lobs
- * ink on a timer instead of closing the rest of the way in (GAME_DESIGN.md §8.1).
- * Returns how many ink lobs landed this step — each costs the Line 1 Stroke, distinct
- * from Line-contact loss (resolveLineContact below).
+ * ink on a timer instead of closing the rest of the way in (GAME_DESIGN.md §8.1). A
+ * staggered Blot (Tome Phrase's Press) skips its whole turn — no march, no strafe, no
+ * lob-timer progress — until `staggeredUntilS` passes. Returns how many ink lobs landed
+ * this step — each costs the Line 1 Stroke, distinct from Line-contact loss
+ * (resolveLineContact below). `timeS` defaults to 0 so call sites that never stagger
+ * anything (most tests) don't need to pass it.
  */
-export function updateBlotMotion(pool: Pool<Blot>, dt: number, brushZ: number): number {
+export function updateBlotMotion(pool: Pool<Blot>, dt: number, brushZ: number, timeS = 0): number {
   let lobsLanded = 0;
   for (let i = pool.activeCount - 1; i >= 0; i--) {
     const b = pool.get(i);
+    if (isBlotStaggered(b, timeS)) continue;
 
     if (b.class === 'blotter') {
       const distanceToBrush = b.z - brushZ;
