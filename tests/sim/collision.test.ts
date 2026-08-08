@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/sim/config.js';
 import { createBlotPool, spawnBlot } from '../../src/sim/blot.js';
 import { createProjectilePool } from '../../src/sim/projectiles.js';
-import { resolveProjectileBlotCollisions } from '../../src/sim/collision.js';
+import { createSealstackPool, spawnSealstack } from '../../src/sim/sealstacks.js';
+import {
+  resolveProjectileBlotCollisions,
+  resolveProjectileSealstackCollisions,
+} from '../../src/sim/collision.js';
 
 function spawnProjectileAt(
   pool: ReturnType<typeof createProjectilePool>,
@@ -131,5 +135,43 @@ describe('resolveProjectileBlotCollisions', () => {
 
     expect(dead.hp).toBe(0); // untouched, not driven further negative
     expect(projectiles.activeCount).toBe(1); // never "hit" anything
+  });
+});
+
+describe('resolveProjectileSealstackCollisions', () => {
+  it('damages a Sealstack on the blocked side within thicknessU', () => {
+    const projectiles = createProjectilePool();
+    const stacks = createSealstackPool();
+    spawnProjectileAt(projectiles, 'tome', -1, 20, 9);
+    const stack = spawnSealstack(stacks, 'left', 20);
+    if (stack === undefined) throw new Error('spawn failed');
+
+    resolveProjectileSealstackCollisions(projectiles, stacks);
+
+    expect(stack.hp).toBeCloseTo(BALANCE.sealstacks.hp - 9, 9);
+  });
+
+  it('a projectile on the unblocked side of the lane misses the stack', () => {
+    const projectiles = createProjectilePool();
+    const stacks = createSealstackPool();
+    spawnProjectileAt(projectiles, 'tome', 1, 20, 9); // right side; stack blocks left
+    const stack = spawnSealstack(stacks, 'left', 20);
+    if (stack === undefined) throw new Error('spawn failed');
+
+    resolveProjectileSealstackCollisions(projectiles, stacks);
+
+    expect(stack.hp).toBe(BALANCE.sealstacks.hp);
+  });
+
+  it('a projectile beyond thicknessU in z misses even on the blocked side', () => {
+    const projectiles = createProjectilePool();
+    const stacks = createSealstackPool();
+    spawnProjectileAt(projectiles, 'tome', -1, 20 + BALANCE.sealstacks.thicknessU * 5, 9);
+    const stack = spawnSealstack(stacks, 'left', 20);
+    if (stack === undefined) throw new Error('spawn failed');
+
+    resolveProjectileSealstackCollisions(projectiles, stacks);
+
+    expect(stack.hp).toBe(BALANCE.sealstacks.hp);
   });
 });

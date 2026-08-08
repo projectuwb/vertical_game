@@ -48,12 +48,28 @@ import {
 } from './sim/slips.js';
 import {
   resolveProjectileBlotCollisions,
+  resolveProjectileSealstackCollisions,
   resolveProjectileSlipCollisions,
 } from './sim/collision.js';
+import {
+  applyGateEffect,
+  createTemperState,
+  generateGatePair,
+  resolveGatePairContact,
+  type GatePair,
+  type TemperState,
+} from './sim/gates.js';
+import {
+  createSealstackPool,
+  resolveSealstackContact,
+  resolveSealstackDeaths,
+  spawnSealstack,
+  updateSealstackMotion,
+} from './sim/sealstacks.js';
 import { RngRegistry } from './core/rng.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
-import { drawRoad, drawSkyWater } from './render/road.js';
+import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater } from './render/road.js';
 import { drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { OffscreenLayers } from './render/layers.js';
@@ -147,7 +163,11 @@ function bootstrap(): void {
   const blotPool = createBlotPool();
   const slipPool = createSlipPool();
   const joiningRecruitPool = createJoiningRecruitPool();
+  const sealstackPool = createSealstackPool();
   const rng = new RngRegistry(Date.now());
+  let temper: TemperState = createTemperState();
+  let currentGatePair: GatePair | null = null;
+  let gatePairZ = 0;
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
@@ -182,6 +202,25 @@ function bootstrap(): void {
       for (const cls of updateJoiningRecruits(joiningRecruitPool, dtFixed)) {
         line = addStroke(line, cls);
       }
+
+      if (currentGatePair !== null) {
+        gatePairZ -= BALANCE.forwardSpeed.baseUPerS * dtFixed;
+        if (gatePairZ <= BRUSH_Z) {
+          const chosenGate = resolveGatePairContact(currentGatePair, brushX);
+          const resolution = applyGateEffect(line, temper, chosenGate.effect);
+          line = resolution.line;
+          temper = resolution.temper;
+          currentGatePair = null;
+        }
+      }
+
+      updateSealstackMotion(sealstackPool, dtFixed);
+      resolveProjectileSealstackCollisions(projectilePool, sealstackPool);
+      resolveSealstackDeaths(sealstackPool);
+      const strokesLostToSealstack = resolveSealstackContact(sealstackPool, BRUSH_Z, brushX);
+      if (strokesLostToSealstack > 0) {
+        line = removeStrokesFromFront(line, strokesLostToSealstack);
+      }
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();
@@ -209,6 +248,10 @@ function bootstrap(): void {
       const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
       drawBlot(layers.actorsCtx, params, blotPool, BRUSH_Z);
       drawSlips(layers.actorsCtx, params, slipPool);
+      if (currentGatePair !== null) {
+        drawGatePair(layers.actorsCtx, params, currentGatePair, gatePairZ);
+      }
+      drawSealstacks(layers.actorsCtx, params, sealstackPool);
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
       drawJoiningRecruits(layers.actorsCtx, params, joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, projectilePool);
@@ -264,6 +307,13 @@ function bootstrap(): void {
       }
       if (e.code === 'Digit0') {
         spawnDebugSlipRun(slipPool, 'plusTwentyFive', 1, line, rng);
+      }
+      if (e.code === 'KeyG') {
+        currentGatePair = generateGatePair(rng);
+        gatePairZ = 40;
+      }
+      if (e.code === 'KeyH') {
+        spawnSealstack(sealstackPool, rng.chance('cosmetic', 0.5) ? 'left' : 'right', 40);
       }
     });
   }

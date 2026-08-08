@@ -8,6 +8,10 @@ import type { ProjectionParams } from './camera.js';
 import { project, type ProjectedPoint } from './projection.js';
 import { PALETTE } from './palette.js';
 import { BALANCE } from '../sim/config.js';
+import type { Gate, GatePair } from '../sim/gates.js';
+import type { Pool } from '../core/pool.js';
+import type { Sealstack } from '../sim/sealstacks.js';
+import { CLASS_COLOR } from './strokes.js';
 
 const LANE_HALF_WIDTH = BALANCE.lane.halfWidth;
 
@@ -150,4 +154,71 @@ function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): 
   ctx.lineTo(corners[3].screenX, corners[3].screenY);
   ctx.closePath();
   ctx.fill();
+}
+
+// Render-only cosmetic constants for Gates/Sealstacks — not gameplay balance.
+const GATE_HEIGHT_U = 1.6;
+const GATE_THICKNESS_U = 0.15;
+const SEALSTACK_HEIGHT_U = 1.2;
+
+function gateColor(gate: Gate): string {
+  if (gate.family === 'sealed') return PALETTE.blot;
+  if (gate.family === 'temper') return PALETTE.jade;
+  if (gate.family === 'conversion' && gate.effect.conversionTarget !== undefined) {
+    return CLASS_COLOR[gate.effect.conversionTarget];
+  }
+  return PALETTE.bone; // arithmetic
+}
+
+function drawGateHalf(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  gate: Gate,
+  xMin: number,
+  xMax: number,
+  z: number,
+): void {
+  const inset = (xMax - xMin) * 0.1;
+  const left = xMin + inset;
+  const right = xMax - inset;
+  fillQuad(
+    ctx,
+    [
+      project(left, 0, z - GATE_THICKNESS_U, params),
+      project(right, 0, z - GATE_THICKNESS_U, params),
+      project(right, GATE_HEIGHT_U, z, params),
+      project(left, GATE_HEIGHT_U, z, params),
+    ],
+    gateColor(gate),
+  );
+}
+
+/** A Gate pair (GAME_DESIGN.md §7.2): two half-lane doors. Family colour-coded — Sealed
+ *  is deliberately the darkest/most mysterious, matching "shows only a seal mark." */
+export function drawGatePair(ctx: CanvasRenderingContext2D, params: ProjectionParams, pair: GatePair, z: number): void {
+  drawGateHalf(ctx, params, pair.left, -BALANCE.lane.halfWidth, 0, z);
+  drawGateHalf(ctx, params, pair.right, 0, BALANCE.lane.halfWidth, z);
+}
+
+/** Sealstacks (GAME_DESIGN.md §7.3): a wide dark block on whichever half of the lane it occupies. */
+export function drawSealstacks(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  pool: Pool<Sealstack>,
+): void {
+  pool.forEachActive((s) => {
+    const xMin = s.side === 'left' ? -BALANCE.lane.halfWidth : 0;
+    const xMax = s.side === 'left' ? 0 : BALANCE.lane.halfWidth;
+    const inset = (xMax - xMin) * 0.08;
+    fillQuad(
+      ctx,
+      [
+        project(xMin + inset, 0, s.z - BALANCE.sealstacks.thicknessU, params),
+        project(xMax - inset, 0, s.z - BALANCE.sealstacks.thicknessU, params),
+        project(xMax - inset, SEALSTACK_HEIGHT_U, s.z, params),
+        project(xMin + inset, SEALSTACK_HEIGHT_U, s.z, params),
+      ],
+      PALETTE.blot,
+    );
+  });
 }

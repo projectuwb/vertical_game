@@ -151,10 +151,30 @@ const balance = {
     },
     /** At least this fraction of pairs must be a genuine dilemma (spec: "1 in 4"). */
     minDilemmaFraction: 0.25,
+    // Pair-generation archetype mix — not named numerically in GAME_DESIGN.md, which
+    // only states the ≥1-in-4 dilemma floor; these are the implementation's chosen
+    // weights (20% Sealed-vs-modest, 30% safety-valve, 50% explicit dilemma) that
+    // satisfy it with margin. See DECISIONS.md.
+    pairArchetype: {
+      sealedThreshold: 0.2,
+      safetyValveThreshold: 0.5,
+    },
+    /** Fair coin flip, reused anywhere a 50/50 choice is needed (which side a gate
+     *  lands on, which "good" sub-outcome a Sealed reveal picks). */
+    fiftyFifty: 0.5,
+    /** Defensive retry bound for the vanishingly-rare case a dilemma pair's two random
+     *  draws land on the same gate; not a balance number, just a loop guard. */
+    identicalRetryGuard: 10,
   },
   sealstacks: {
     /** Strokes lost on impact = ceil(remainingHP / this). */
     hpToStrokeLossDivisor: 12,
+    // Neither given a number in GAME_DESIGN.md §7.3. hp=60 asks for sustained fire
+    // (comparable to a Crust) without being a boss fight; thicknessU=1.0 gives the
+    // "stacked column of discs" enough hit-depth to read as a solid object rather
+    // than a knife-edge plane. Logged in DECISIONS.md.
+    hp: 60,
+    thicknessU: 1.0,
   },
 
   // §8.1 Blot units
@@ -272,6 +292,9 @@ const balance = {
     // busy moment of in-flight recruits, with headroom to spare.
     slipCapacity: 64,
     joiningRecruitCapacity: 64,
+    // At most one or two Sealstack pairs are ever in flight at once (§7.2's ~220u
+    // spacing); 16 is generous headroom.
+    sealstackCapacity: 16,
   },
 
   // Projectile-vs-Blot hit radius: not given a number anywhere in either spec (neither

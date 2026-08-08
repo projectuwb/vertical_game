@@ -1,11 +1,12 @@
-// Collision resolution: projectile ↔ Blot/Slip hit detection and damage application
-// (GAME_DESIGN.md §4/§7/§8, Task 2.3/2.4/2.5).
+// Collision resolution: projectile ↔ Blot/Slip/Sealstack hit detection and damage
+// application (GAME_DESIGN.md §4/§7/§8, Task 2.3/2.4/2.5/2.6).
 
 import type { Pool } from '../core/pool.js';
 import { BALANCE } from './config.js';
 import { applyArmorMultiplier, registerHit, type Projectile } from './projectiles.js';
 import type { Blot, BlotClass } from './blot.js';
 import { slipHitRadiusU, type Slip } from './slips.js';
+import { isBrushInSealstackZone, type Sealstack } from './sealstacks.js';
 
 function damageTargetKind(cls: BlotClass): 'crust' | 'normal' {
   return cls === 'crust' ? 'crust' : 'normal';
@@ -103,6 +104,42 @@ export function resolveProjectileSlipCollisions(
     if (hitSlip === undefined) continue;
 
     hitSlip.hp -= applyArmorMultiplier(proj.class, proj.damage, 'slip');
+
+    if (registerHit(proj)) {
+      projectilePool.release(proj);
+    }
+  }
+}
+
+/**
+ * Hit-tests every active projectile against every active Sealstack. Sealstacks are wide
+ * (they block a full lane-half, GAME_DESIGN.md §7.3) rather than point-like, so the hit
+ * test is "is the projectile on the blocked side, within the stack's z-thickness" —
+ * the same lane-half predicate `resolveSealstackContact` uses for the Brush, not a
+ * circle-vs-circle check. No armour multiplier distinction: Sealstacks aren't a Blot
+ * class, so damage applies as if against a 'normal' target.
+ */
+export function resolveProjectileSealstackCollisions(
+  projectilePool: Pool<Projectile>,
+  sealstackPool: Pool<Sealstack>,
+): void {
+  for (let pi = projectilePool.activeCount - 1; pi >= 0; pi--) {
+    const proj = projectilePool.get(pi);
+    let hitStack: Sealstack | undefined;
+
+    for (let si = sealstackPool.activeCount - 1; si >= 0; si--) {
+      const stack = sealstackPool.get(si);
+      if (stack.hp <= 0) continue; // already dead this step, awaiting resolveSealstackDeaths
+      const withinDepth = Math.abs(proj.z - stack.z) <= BALANCE.sealstacks.thicknessU;
+      if (withinDepth && isBrushInSealstackZone(stack.side, proj.x)) {
+        hitStack = stack;
+        break;
+      }
+    }
+
+    if (hitStack === undefined) continue;
+
+    hitStack.hp -= applyArmorMultiplier(proj.class, proj.damage, 'normal');
 
     if (registerHit(proj)) {
       projectilePool.release(proj);

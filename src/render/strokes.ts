@@ -13,7 +13,7 @@ import type { Projectile } from '../sim/projectiles.js';
 import type { JoiningRecruit, Slip } from '../sim/slips.js';
 import type { StrokeClass } from '../sim/stroke.js';
 
-const CLASS_COLOR: Record<StrokeClass, string> = {
+export const CLASS_COLOR: Record<StrokeClass, string> = {
   hane: PALETTE.jade,
   tome: PALETTE.vermilion,
   harai: PALETTE.bone,
