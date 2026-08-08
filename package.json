@@ -16,6 +16,7 @@
     "build:cli": "tsc -p tsconfig.cli.json",
     "sim": "npm run build:cli && node dist-cli/balance/harness.js",
     "perf": "npm run build:cli && node dist-cli/balance/perf.js",
+    "check-colorblind": "npm run build:cli && node dist-cli/build/checkColorblind.js",
     "generate-icons": "npm run build:cli && node dist-cli/build/generateIcons.js",
     "generate-sw": "npm run build:cli && node dist-cli/build/generateServiceWorker.js",
     "verify-offline": "npm run build:cli && node dist-cli/build/verifyNoExternalFetch.js"

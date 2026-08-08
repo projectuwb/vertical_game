@@ -79,13 +79,7 @@ function drawStroke(
   const ground = project(x, 0, z, params);
   const pxSize = SILHOUETTE_BASE_SIZE_U * ground.scale * params.unit;
   ctx.fillStyle = CLASS_COLOR[cls];
-  if (cls === 'hane') {
-    drawHaneGlyph(ctx, ground.screenX, ground.screenY, pxSize);
-  } else if (cls === 'tome') {
-    drawTomeGlyph(ctx, ground.screenX, ground.screenY, pxSize);
-  } else {
-    drawHaraiGlyph(ctx, ground.screenX, ground.screenY, pxSize);
-  }
+  drawGlyph(ctx, ground.screenX, ground.screenY, pxSize, cls);
   if (shapesOnly) drawShapesOnlyMark(ctx, ground.screenX, ground.screenY, pxSize, cls);
 }
 
@@ -130,39 +124,68 @@ function drawShapesOnlyMark(
   }
 }
 
-/** Hane — a narrow upward tick. */
-function drawHaneGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-  const halfWidth = size * 0.18;
-  const height = size * 1.3;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - height);
-  ctx.lineTo(cx + halfWidth, cy);
-  ctx.lineTo(cx - halfWidth, cy);
-  ctx.closePath();
-  ctx.fill();
-}
+export type GlyphPoint = readonly [number, number];
 
-/** Tome — a squat heavy block. */
-function drawTomeGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-  const halfWidth = size * 0.55;
-  const halfHeight = size * 0.65;
-  ctx.fillRect(cx - halfWidth, cy - halfHeight, halfWidth * 2, halfHeight * 2);
-}
-
-/** Harai — a long tapering diagonal sliver. */
-function drawHaraiGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
+/**
+ * The three classes' silhouette-defining polygons (GAME_DESIGN.md §4's "silhouette
+ * first, colour second"), local to a glyph centred at the origin at the given `size` —
+ * the single source of truth `drawStroke`'s actual `ctx` calls below draw from. Task
+ * 7.6's `src/build/checkColorblind.ts` dev tool duplicates these same numbers rather
+ * than importing them (with an explicit cross-reference comment) — it compiles under
+ * `tsconfig.cli.json`'s Node-only program, which doesn't include /render, the same
+ * constraint `generateIcons.ts` already documents for its own copy of the Harai
+ * triangle. Harai's rotation is baked into the returned points (matching what
+ * `ctx.rotate` used to do implicitly) rather than left for the caller to apply, since
+ * the rotation is part of the glyph's identity, not a caller-supplied transform.
+ */
+export function strokeGlyphPolygon(cls: StrokeClass, size: number): readonly GlyphPoint[] {
+  if (cls === 'hane') {
+    // A narrow upward tick.
+    const halfWidth = size * 0.18;
+    const height = size * 1.3;
+    return [
+      [0, -height],
+      [halfWidth, 0],
+      [-halfWidth, 0],
+    ];
+  }
+  if (cls === 'tome') {
+    // A squat heavy block.
+    const halfWidth = size * 0.55;
+    const halfHeight = size * 0.65;
+    return [
+      [-halfWidth, -halfHeight],
+      [halfWidth, -halfHeight],
+      [halfWidth, halfHeight],
+      [-halfWidth, halfHeight],
+    ];
+  }
+  // Harai — a long tapering diagonal sliver, rotated -36° (-π/5).
   const length = size * 1.6;
   const width = size * 0.32;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-Math.PI / 5);
+  const angle = -Math.PI / 5;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const local: readonly GlyphPoint[] = [
+    [-length / 2, 0],
+    [length / 2, -width / 2],
+    [length / 2, width / 2],
+  ];
+  return local.map(([x, y]) => [x * cos - y * sin, x * sin + y * cos]);
+}
+
+function fillGlyphPolygon(ctx: CanvasRenderingContext2D, cx: number, cy: number, points: readonly GlyphPoint[]): void {
   ctx.beginPath();
-  ctx.moveTo(-length / 2, 0);
-  ctx.lineTo(length / 2, -width / 2);
-  ctx.lineTo(length / 2, width / 2);
+  points.forEach(([x, y], i) => {
+    if (i === 0) ctx.moveTo(cx + x, cy + y);
+    else ctx.lineTo(cx + x, cy + y);
+  });
   ctx.closePath();
   ctx.fill();
-  ctx.restore();
+}
+
+function drawGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, cls: StrokeClass): void {
+  fillGlyphPolygon(ctx, cx, cy, strokeGlyphPolygon(cls, size));
 }
 
 function drawDensityBlock(
