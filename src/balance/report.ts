@@ -199,7 +199,7 @@ function evaluateTargets(
         sealBrokenFraction <= t.firstSealBrokenZeroUpgradesFraction.max
           ? 'PASS'
           : 'FAIL',
-      detail: `${formatNum(sealBrokenFraction * 100, 1)}% vs target ${formatNum(t.firstSealBrokenZeroUpgradesFraction.min * 100, 0)}-${formatNum(t.firstSealBrokenZeroUpgradesFraction.max * 100, 0)}% (no bot strategy fights a Seal intelligently yet, so this is a floor)`,
+      detail: `${formatNum(sealBrokenFraction * 100, 1)}% vs target ${formatNum(t.firstSealBrokenZeroUpgradesFraction.min * 100, 0)}-${formatNum(t.firstSealBrokenZeroUpgradesFraction.max * 100, 0)}% (every strategy dodges Seal telegraphs as of Task 4.6b, so this reflects real zero-upgrades DPS against a dodged fight, not a ceiling artifact)`,
     });
   } else {
     rows.push(

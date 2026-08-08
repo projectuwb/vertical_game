@@ -11,6 +11,9 @@ import { deriveSeed, mulberry32 } from '../core/rng.js';
 import { BALANCE } from '../sim/config.js';
 import type { ArithmeticOp, Gate, GatePair } from '../sim/gates.js';
 import type { World, WorldInput } from '../sim/world.js';
+import { SMEAR_SEAL_DEFINITION, smearActiveVisual } from '../sim/seals/smear.js';
+import { PRESS_SEAL_DEFINITION, pressActiveVisual } from '../sim/seals/press.js';
+import { BLANK_SEAL_DEFINITION, blankActiveVisual } from '../sim/seals/blank.js';
 
 export type BotStrategy = 'greedy-slips' | 'greedy-kill' | 'mixed' | 'gates' | 'random';
 
@@ -262,6 +265,42 @@ function decideRandomTargetX(world: World, botState: BotState): number {
   return amplitude * Math.sin(world.timeS * RANDOM_WANDER_HZ * Math.PI * 2 + botState.randomPhase);
 }
 
+// --- Seal-telegraph dodging (Task 4.6b) — every strategy gets this, same priority
+// order the individual bosses' own zero-upgrades baseline tests (smear/press/blank
+// .test.ts) already established: dodge an active telegraph first, over any normal
+// Blot/Slip targeting, since none of GAME_DESIGN.md §8.2's Seal attacks are survivable
+// by ignoring them. Before Task 4.6b, none of the five harness strategies had any Seal
+// awareness at all, making "First Seal broken" a ceiling artifact (raw zero-upgrades DPS
+// alone was already enough to win) and leaving Seal fights causing ~0% of harness
+// deaths even well past the 75s arcade cadence. ---
+
+/** `null` when there's no Seal encounter or no active telegraph to react to — callers
+ *  fall through to their normal targeting in that case (during a fight's cooldown
+ *  windows, or the Smudges/Slips a Press/Blank fight also throws at the Line). */
+function decideSealDodgeTargetX(world: World): number | null {
+  if (world.seal === null || world.sealDefinition === null) return null;
+  const clampX = BALANCE.lane.brushClampX;
+
+  if (world.sealDefinition === SMEAR_SEAL_DEFINITION) {
+    const visual = smearActiveVisual(world.seal.bossState);
+    if (visual === null) return null;
+    return visual.centerX >= 0 ? -clampX : clampX;
+  }
+  if (world.sealDefinition === PRESS_SEAL_DEFINITION) {
+    const visual = pressActiveVisual(world.seal.bossState);
+    if (visual === null) return null;
+    return visual.gapCenters.reduce((sum, c) => sum + c, 0) / visual.gapCenters.length;
+  }
+  if (world.sealDefinition === BLANK_SEAL_DEFINITION) {
+    const visual = blankActiveVisual(world.seal.bossState);
+    // The erasure beam targets the road/economy, not the Brush (DECISIONS.md) — nothing
+    // to dodge. Only the conversion cone needs a positional answer.
+    if (visual === null || visual.attackKind === 'beam') return null;
+    return visual.coneCenterX >= 0 ? -clampX : clampX;
+  }
+  return null;
+}
+
 export function decideInput(
   strategy: BotStrategy,
   world: World,
@@ -269,22 +308,27 @@ export function decideInput(
   botState: BotState,
 ): WorldInput {
   let targetX: number;
-  switch (strategy) {
-    case 'greedy-slips':
-      targetX = decideGreedySlipsTargetX(world);
-      break;
-    case 'greedy-kill':
-      targetX = decideGreedyKillTargetX(world);
-      break;
-    case 'mixed':
-      targetX = decideMixedTargetX(world);
-      break;
-    case 'gates':
-      targetX = decideGatesTargetX(world);
-      break;
-    case 'random':
-      targetX = decideRandomTargetX(world, botState);
-      break;
+  const sealDodgeTargetX = decideSealDodgeTargetX(world);
+  if (sealDodgeTargetX !== null) {
+    targetX = sealDodgeTargetX;
+  } else {
+    switch (strategy) {
+      case 'greedy-slips':
+        targetX = decideGreedySlipsTargetX(world);
+        break;
+      case 'greedy-kill':
+        targetX = decideGreedyKillTargetX(world);
+        break;
+      case 'mixed':
+        targetX = decideMixedTargetX(world);
+        break;
+      case 'gates':
+        targetX = decideGatesTargetX(world);
+        break;
+      case 'random':
+        targetX = decideRandomTargetX(world, botState);
+        break;
+    }
   }
   const lateralDelta = stepToward(world.brushTargetX, targetX, KEYBOARD_LATERAL_SPEED * dtFixed);
   const holding = updateRestState(botState, world.wetness.current);
