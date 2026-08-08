@@ -22,15 +22,41 @@ export const ALL_BOT_STRATEGIES: readonly BotStrategy[] = [
   'random',
 ];
 
-/** Per-Passage bot state. Only `random` needs anything — a fixed phase so its wander is
- *  deterministic for a given seed without threading a live RNG stream through every step. */
+/** Per-Passage bot state, mutated in place across steps like World's own pools —
+ *  `randomPhase` is fixed (a deterministic wander for `random`, no live RNG stream
+ *  needed); `isResting` is the Wetness hysteresis flag `updateRestState` owns below. */
 export interface BotState {
   readonly randomPhase: number;
+  isResting: boolean;
 }
 
 export function createBotState(seed: number): BotState {
   const rng = mulberry32(deriveSeed(seed, 'bot'));
-  return { randomPhase: rng() * Math.PI * 2 };
+  return { randomPhase: rng() * Math.PI * 2, isResting: false };
+}
+
+/**
+ * None of the five strategies below reason about Wetness (TECH_SPEC.md §6's spec text
+ * predates Task 2.8's economy) — without this, every bot fires every step it can, so
+ * Wetness hits 0 within ~17s of Passage start and never recovers, running the entire
+ * rest of every Passage at the dry-state's ×0.5 fire rate and badly skewing every
+ * balance number that follows. This is a bot-instinct fix, not a strategy: holding
+ * pauses firing regardless of whether a Flourish charge is actually valid (world.ts),
+ * so a bot doesn't need any Flourish-specific logic to "rest" — it just needs to know
+ * when to stop. Hysteresis (rest until a materially higher threshold, not just until
+ * back above the entry point) avoids flickering in and out of a hold every other step
+ * right at the boundary.
+ */
+const REST_ENTER_WETNESS = 10;
+const REST_EXIT_WETNESS = 60;
+
+function updateRestState(botState: BotState, wetnessCurrent: number): boolean {
+  if (botState.isResting) {
+    if (wetnessCurrent >= REST_EXIT_WETNESS) botState.isResting = false;
+  } else if (wetnessCurrent <= REST_ENTER_WETNESS) {
+    botState.isResting = true;
+  }
+  return botState.isResting;
 }
 
 const KEYBOARD_LATERAL_SPEED = BALANCE.control.keyboardUPerS;
@@ -261,7 +287,6 @@ export function decideInput(
       break;
   }
   const lateralDelta = stepToward(world.brushTargetX, targetX, KEYBOARD_LATERAL_SPEED * dtFixed);
-  // Flourish/Wetness (Task 2.8) isn't wired into stepWorld yet, so `holding` is currently
-  // inert either way — left false rather than pretending any strategy has an opinion.
-  return { lateralDelta, holding: false };
+  const holding = updateRestState(botState, world.wetness.current);
+  return { lateralDelta, holding };
 }

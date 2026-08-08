@@ -28,20 +28,15 @@ import { createWorld, stepWorld, type World } from './sim/world.js';
 import { RngRegistry } from './core/rng.js';
 import type { Pool } from './core/pool.js';
 import { computeProjectionParams } from './render/camera.js';
-import { project } from './render/projection.js';
 import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater } from './render/road.js';
-import { drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
+import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { OffscreenLayers } from './render/layers.js';
-import { PALETTE } from './render/palette.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
 /** The Brush's fixed world-space depth: the road scrolls past it, not the other way
  *  round. Matches world.ts's own (private) BRUSH_Z exactly. */
 const BRUSH_Z = 0;
-/** Slightly ahead of the Line's own front-row bulge, so the Brush reads as the leader. */
-const BRUSH_MARKER_Z = BRUSH_Z + 0.5;
-const BRUSH_MARKER_RADIUS_U = 0.3;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -119,7 +114,6 @@ function bootstrap(): void {
   // recording/display is Task 4.1/4.3 (persistence, screens) — for now each page load
   // just gets a fresh one, same as before this refactor.
   let world: World = createWorld(Date.now());
-  let holding = false;
   // Decoupled from world.rng on purpose (see spawnDebugSlipRun) — debug keys are dev
   // tooling, not part of a replayable Passage.
   const debugRng = new RngRegistry(Date.now());
@@ -127,7 +121,6 @@ function bootstrap(): void {
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
       const frame = input.sample(dtFixed);
-      holding = frame.holding;
       stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
     },
     render: (_alpha: number): void => {
@@ -163,18 +156,7 @@ function bootstrap(): void {
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line);
       drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, world.projectilePool);
-
-      const marker = project(brushX, BRUSH_MARKER_RADIUS_U, BRUSH_MARKER_Z, params);
-      layers.actorsCtx.beginPath();
-      layers.actorsCtx.arc(
-        marker.screenX,
-        marker.screenY,
-        Math.max(2, BRUSH_MARKER_RADIUS_U * marker.scale * params.unit),
-        0,
-        Math.PI * 2,
-      );
-      layers.actorsCtx.fillStyle = holding ? PALETTE.vermilion : PALETTE.bone;
-      layers.actorsCtx.fill();
+      drawBrush(layers.actorsCtx, params, brushX, BRUSH_Z, world.wetness, world.flourish, world.timeS);
 
       layers.compositeInto(viewport.ctx);
     },

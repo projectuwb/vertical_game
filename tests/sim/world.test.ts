@@ -3,6 +3,7 @@ import { BALANCE } from '../../src/sim/config.js';
 import { computeGoldLeaf, createWorld, stepWorld, type WorldInput } from '../../src/sim/world.js';
 import { spawnBlot } from '../../src/sim/blot.js';
 import { spawnSlip } from '../../src/sim/slips.js';
+import { spawnInkPool } from '../../src/sim/wetness.js';
 
 const DT = 1 / 60;
 const NO_INPUT: WorldInput = { lateralDelta: 0, holding: false };
@@ -137,6 +138,108 @@ describe('stepWorld', () => {
     expect(Number.isFinite(world.timeS)).toBe(true);
     expect(Number.isFinite(world.distanceU)).toBe(true);
     expect(Number.isFinite(world.brushFollower.position)).toBe(true);
+  });
+});
+
+describe('wetness/Flourish integration', () => {
+  it('starts full and drains at drainPerSWhileFiring while the Line is firing (not holding)', () => {
+    const world = createWorld(1);
+    for (let i = 0; i < 60; i++) stepWorld(world, DT, NO_INPUT);
+    expect(world.wetness.current).toBeCloseTo(
+      BALANCE.wetness.max - BALANCE.wetness.drainPerSWhileFiring,
+      3,
+    );
+  });
+
+  it('holding suspends firing entirely (no new projectiles) and stops the drain', () => {
+    const world = createWorld(1);
+    for (let i = 0; i < 30; i++) stepWorld(world, DT, NO_INPUT); // drain a bit first
+    const drained = world.wetness.current;
+    expect(drained).toBeLessThan(BALANCE.wetness.max);
+
+    world.projectilePool.releaseAll();
+    for (let i = 0; i < 30; i++) stepWorld(world, DT, { lateralDelta: 0, holding: true });
+
+    expect(world.projectilePool.activeCount).toBe(0); // firing was suspended, nothing new spawned
+    expect(world.wetness.current).toBeGreaterThanOrEqual(drained); // never drained further while holding
+  });
+
+  it('wetness refills after holding long enough to clear the refill delay', () => {
+    const world = createWorld(1);
+    for (let i = 0; i < 30; i++) stepWorld(world, DT, NO_INPUT);
+    const drained = world.wetness.current;
+
+    const holdSteps = Math.ceil((BALANCE.wetness.refillDelayS + 0.5) / DT);
+    for (let i = 0; i < holdSteps; i++) stepWorld(world, DT, { lateralDelta: 0, holding: true });
+
+    expect(world.wetness.current).toBeGreaterThan(drained);
+  });
+
+  it('a full hold-and-release Flourish damages a Blot in range, costs Wetness, and starts the cooldown', () => {
+    const world = createWorld(1);
+    // At the default 3-Stroke start (rowCount=1), the sweep's own damage (28*1.15≈32.2)
+    // already exceeds every Blot class's HP, so "damages" is observed as a kill here —
+    // spawned far enough that Crust's 6u/s march doesn't reach contact during the
+    // charge+release window below (~0.38s) first, still inside Flourish's 5u radius.
+    spawnBlot(world.blotPool, 'crust', 0, 4);
+
+    const chargeSteps = Math.ceil(BALANCE.flourish.chargeTimeS / DT) + 1;
+    for (let i = 0; i < chargeSteps; i++) stepWorld(world, DT, { lateralDelta: 0, holding: true });
+    stepWorld(world, DT, { lateralDelta: 0, holding: false }); // release triggers the sweep
+
+    expect(world.blotKilled).toBeGreaterThanOrEqual(1);
+    expect(world.blotPool.activeCount).toBe(0);
+    // The release step also resumes normal firing (holding is false again that same
+    // step), so on top of the Flourish's own cost, that step drains one more tick.
+    const expectedWetness =
+      BALANCE.wetness.max - BALANCE.flourish.cost - BALANCE.wetness.drainPerSWhileFiring * DT;
+    expect(world.wetness.current).toBeCloseTo(expectedWetness, 3);
+    expect(world.flourish.cooldownUntilS).toBeGreaterThan(world.timeS - DT);
+  });
+
+  it('releasing before the charge threshold spends nothing and leaves the Blot untouched', () => {
+    const world = createWorld(1);
+    spawnBlot(world.blotPool, 'crust', 0, 2);
+    const hpBefore = (world.blotPool.get(0) as { hp: number }).hp;
+
+    stepWorld(world, DT, { lateralDelta: 0, holding: true });
+    stepWorld(world, DT, { lateralDelta: 0, holding: false }); // released almost immediately — no sweep
+
+    expect(world.blotPool.get(0).hp).toBe(hpBefore);
+    // No Flourish cost was paid, but the release step itself resumes normal firing.
+    expect(world.wetness.current).toBeCloseTo(BALANCE.wetness.max - BALANCE.wetness.drainPerSWhileFiring * DT, 6);
+  });
+
+  it('at 0 Wetness, fire rate halves — fewer projectiles spawn over the same window than at full Wetness', () => {
+    const dry = createWorld(1);
+    dry.wetness = { current: 0, timeSinceStoppedFiringS: 0 };
+    const full = createWorld(1);
+
+    let dryFired = 0;
+    let fullFired = 0;
+    for (let i = 0; i < 120; i++) {
+      const before = dry.projectilePool.activeCount;
+      stepWorld(dry, DT, NO_INPUT);
+      dryFired += Math.max(0, dry.projectilePool.activeCount - before);
+      dry.wetness = { current: 0, timeSinceStoppedFiringS: 0 }; // hold it dry all window
+
+      const beforeFull = full.projectilePool.activeCount;
+      stepWorld(full, DT, NO_INPUT);
+      fullFired += Math.max(0, full.projectilePool.activeCount - beforeFull);
+    }
+
+    expect(dryFired).toBeLessThan(fullFired);
+  });
+
+  it('an ink pool restores Wetness on contact', () => {
+    const world = createWorld(1);
+    for (let i = 0; i < 30; i++) stepWorld(world, DT, NO_INPUT);
+    const drained = world.wetness.current;
+    spawnInkPool(world.inkPoolPool, 0, -1); // already at/past the Brush at x=0 (Brush starts centred)
+
+    stepWorld(world, DT, NO_INPUT);
+
+    expect(world.wetness.current).toBeGreaterThan(drained);
   });
 });
 

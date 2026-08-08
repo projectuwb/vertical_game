@@ -47,16 +47,20 @@ export interface FiringPlan {
  * projectiles fired from the front row, capped at `maxVisibleProjectilesPerClassPerS`
  * (24) — beyond the cap, the surplus rate folds into a damage multiplier on the (fewer)
  * projectiles that do spawn, so total DPS output is exactly preserved regardless of how
- * many projectiles represent it on screen.
+ * many projectiles represent it on screen. `rateMultiplier` (default 1) scales the
+ * desired rate before the cap/compensation math runs, so wetness.ts's dry-state ×0.5
+ * (GAME_DESIGN.md §6) actually halves the shot count rather than halving already-capped
+ * damage.
  */
 export function computeFiringPlan(
   cls: StrokeClass,
   frontRowCount: number,
   backRowCount: number,
+  rateMultiplier = 1,
 ): FiringPlan {
   const stats = BALANCE.strokes[cls];
   const effectiveStrokeCount = frontRowCount + backRowCount * BALANCE.line.extraRowDpsContribution;
-  const desiredRate = stats.fireRatePerS * effectiveStrokeCount;
+  const desiredRate = stats.fireRatePerS * effectiveStrokeCount * rateMultiplier;
   const cap = BALANCE.line.maxVisibleProjectilesPerClassPerS;
   const spawnRatePerS = Math.min(desiredRate, cap);
   const damagePerProjectile = spawnRatePerS > 0 ? stats.damage * (desiredRate / spawnRatePerS) : 0;
@@ -104,9 +108,10 @@ export function updateFiring(
   frontRowCounts: Record<StrokeClass, number>,
   backRowCounts: Record<StrokeClass, number>,
   frontRowSources: Record<StrokeClass, readonly FrontRowSource[]>,
+  rateMultiplier = 1,
 ): void {
   for (const cls of ALL_CLASSES) {
-    const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls]);
+    const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls], rateMultiplier);
     const sources = frontRowSources[cls];
     const state = accumulators[cls];
 

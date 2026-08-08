@@ -12,6 +12,8 @@ import type { Pool } from '../core/pool.js';
 import type { Projectile } from '../sim/projectiles.js';
 import type { JoiningRecruit, Slip } from '../sim/slips.js';
 import type { StrokeClass } from '../sim/stroke.js';
+import { isWetnessDry, type WetnessState } from '../sim/wetness.js';
+import { flourishChargeFraction, type FlourishState } from '../sim/flourish.js';
 
 export const CLASS_COLOR: Record<StrokeClass, string> = {
   hane: PALETTE.jade,
@@ -319,4 +321,80 @@ export function drawJoiningRecruits(
     ctx.arc(ground.screenX, ground.screenY, pxRadius, 0, Math.PI * 2);
     ctx.fill();
   });
+}
+
+// Render-only cosmetic constants for the Brush marker — not gameplay balance.
+const BRUSH_RADIUS_U = 0.3;
+const BRUSH_MARKER_Z_LEAD_U = 0.5; // slightly ahead of the Line's own front-row bulge
+const BRUSH_CHARGE_GROW_FRACTION = 0.5; // how much bigger the Brush gets at full charge
+const BRUSH_PULSE_HZ = 4; // insufficient-Wetness/on-cooldown "no" pulse
+const BRUSH_EMPTY_RING_ALPHA = 0.35;
+
+/** Blends `hex` toward its own greyscale luminance by `amount` (0-1) — used for the dry
+ *  Wetness state's "colours desaturate 60%" (GAME_DESIGN.md §6), computed from the one
+ *  declared palette colour rather than adding a second hardcoded swatch (palette.ts:
+ *  "exactly these, no others without logging a decision"). */
+function desaturate(hex: string, amount: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+  const mix = (c: number): number => Math.round(c + (gray - c) * amount);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+/**
+ * The Brush itself (GAME_DESIGN.md §6): Wetness is "drawn as an ink level in the Brush's
+ * own body, not as a UI bar" — rendered as a liquid-style fill rising from the bottom of
+ * the marker to `current/max`, inside a faint always-visible ring so an empty Brush still
+ * reads as present rather than missing. At Wetness 0 the fill (nearly empty) and the
+ * desaturated colour double up to make "the Brush visibly runs pale" unmistakable without
+ * needing a separate bar. While charging a valid Flourish the Brush grows and turns
+ * vermilion with charge progress; while holding on an invalid charge (too little Wetness,
+ * still on cooldown) it pulses instead, per §6's "shows the meter pulsing."
+ */
+export function drawBrush(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  brushX: number,
+  brushZ: number,
+  wetness: WetnessState,
+  flourish: FlourishState,
+  timeS: number,
+): void {
+  const chargeFraction = flourishChargeFraction(flourish, timeS);
+  const ground = project(brushX, 0, brushZ + BRUSH_MARKER_Z_LEAD_U, params);
+  const baseRadiusPx = Math.max(2, BRUSH_RADIUS_U * ground.scale * params.unit);
+  const radiusPx = baseRadiusPx * (1 + chargeFraction * BRUSH_CHARGE_GROW_FRACTION);
+
+  const isCharging = chargeFraction > 0;
+  const color = isCharging
+    ? PALETTE.vermilion
+    : isWetnessDry(wetness)
+      ? desaturate(PALETTE.bone, BALANCE.wetness.dryDesaturateFraction)
+      : PALETTE.bone;
+
+  let alpha = 1;
+  if (flourish.isPulsing) {
+    const pulse = 0.5 + 0.5 * Math.sin(timeS * BRUSH_PULSE_HZ * Math.PI * 2);
+    alpha = 0.4 + pulse * 0.6;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = alpha * BRUSH_EMPTY_RING_ALPHA;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(ground.screenX, ground.screenY, radiusPx, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const fraction = Math.max(0, Math.min(1, wetness.current / BALANCE.wetness.max));
+  ctx.beginPath();
+  ctx.arc(ground.screenX, ground.screenY, radiusPx, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  const fillTop = ground.screenY + radiusPx - fraction * radiusPx * 2;
+  ctx.fillRect(ground.screenX - radiusPx, fillTop, radiusPx * 2, radiusPx * 2);
+  ctx.restore();
 }

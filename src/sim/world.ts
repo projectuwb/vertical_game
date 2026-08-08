@@ -68,6 +68,24 @@ import {
   resolveProjectileSlipCollisions,
 } from './collision.js';
 import {
+  createInkPoolPool,
+  createWetnessState,
+  isWetnessDry,
+  resolveInkPoolContact,
+  spawnInkPool,
+  spendWetness,
+  stepWetness,
+  updateInkPoolMotion,
+  type InkPool,
+  type WetnessState,
+} from './wetness.js';
+import {
+  applyFlourishSweep,
+  createFlourishState,
+  stepFlourishInput,
+  type FlourishState,
+} from './flourish.js';
+import {
   computeComposition,
   computeSlipBudgetPer100U,
   computePressure,
@@ -107,6 +125,7 @@ export interface World {
   readonly slipPool: Pool<Slip>;
   readonly joiningRecruitPool: Pool<JoiningRecruit>;
   readonly sealstackPool: Pool<Sealstack>;
+  readonly inkPoolPool: Pool<InkPool>;
 
   brushTargetX: number;
   brushFollower: DampedFollower1D;
@@ -118,10 +137,18 @@ export interface World {
   nextSlipBudgetAtDistanceU: number;
   nextGateAtDistanceU: number;
   nextSealstackAtDistanceU: number;
+  nextInkPoolAtDistanceU: number;
 
   mercy: MercyState;
   currentGatePair: GatePair | null;
   gatePairZ: number;
+
+  wetness: WetnessState;
+  flourish: FlourishState;
+  /** input.holding from the previous step — flourish.ts's charge/release state machine
+   *  is edge-triggered (a hold *starting*, a hold *ending*), so it needs this to detect
+   *  the transition rather than just the current value. */
+  previousHolding: boolean;
 
   blotKilled: number;
 
@@ -142,6 +169,7 @@ export function createWorld(seed: number): World {
     slipPool: createSlipPool(),
     joiningRecruitPool: createJoiningRecruitPool(),
     sealstackPool: createSealstackPool(),
+    inkPoolPool: createInkPoolPool(),
 
     brushTargetX: 0,
     brushFollower: { position: 0, velocity: 0 },
@@ -153,10 +181,15 @@ export function createWorld(seed: number): World {
     nextSlipBudgetAtDistanceU: BALANCE.director.slipBudget.perU,
     nextGateAtDistanceU: jitteredInterval(rng, BALANCE.gates.pairIntervalU),
     nextSealstackAtDistanceU: jitteredInterval(rng, BALANCE.director.sealstackIntervalU),
+    nextInkPoolAtDistanceU: jitteredInterval(rng, BALANCE.wetness.poolSpacingU),
 
     mercy: createMercyState(),
     currentGatePair: null,
     gatePairZ: 0,
+
+    wetness: createWetnessState(),
+    flourish: createFlourishState(),
+    previousHolding: false,
 
     blotKilled: 0,
 
@@ -201,10 +234,36 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   );
   const brushX = clamp(world.brushFollower.position, -BALANCE.lane.brushClampX, BALANCE.lane.brushClampX);
 
+  // Flourish (GAME_DESIGN.md §6) runs before firing/combat this step: holding suspends
+  // the normal auto-fire entirely ("Wetness converts the always-firing default into an
+  // occasional decision to stop"), and a triggered sweep's damage needs to land before
+  // this step's own resolveBlotDeaths so a Flourish kill is counted exactly like any
+  // other — not deferred to next step.
+  const flourishResult = stepFlourishInput(
+    world.flourish,
+    world.timeS,
+    input.holding,
+    world.previousHolding,
+    world.wetness.current,
+  );
+  world.flourish = flourishResult.state;
+  if (flourishResult.triggered) {
+    world.wetness = spendWetness(world.wetness, BALANCE.flourish.cost);
+    const rowCount = Math.ceil(world.line.strokes.length / BALANCE.line.rowSize);
+    applyFlourishSweep(world.blotPool, brushX, BRUSH_Z, rowCount);
+  }
+  world.previousHolding = input.holding;
+
   const { front, back } = computeRowClassCounts(world.line);
   const sources = computeFrontRowSourcePositions(world.line, brushX, BRUSH_Z);
-  updateFiring(world.firingAccumulators, world.projectilePool, dtFixed, front, back, sources);
+  if (!input.holding) {
+    const rateMultiplier = isWetnessDry(world.wetness) ? BALANCE.wetness.dryFireRateMult : 1;
+    updateFiring(world.firingAccumulators, world.projectilePool, dtFixed, front, back, sources, rateMultiplier);
+  }
   updateProjectileMotion(world.projectilePool, dtFixed);
+
+  const isFiring = !input.holding && world.line.strokes.length > 0;
+  world.wetness = stepWetness(world.wetness, dtFixed, isFiring);
 
   const lobsLanded = updateBlotMotion(world.blotPool, dtFixed, BRUSH_Z);
   resolveProjectileBlotCollisions(world.projectilePool, world.blotPool);
@@ -249,6 +308,9 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     killLineIfEmpty(world, 'sealstack');
   }
 
+  updateInkPoolMotion(world.inkPoolPool, dtFixed);
+  world.wetness = resolveInkPoolContact(world.inkPoolPool, world.wetness, brushX, BRUSH_Z);
+
   if (world.isDead) return; // no point directing more content at a Passage that's over
 
   world.mercy = updateMercyState(world.mercy, world.timeS, world.line.strokes.length);
@@ -276,6 +338,13 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     spawnSealstack(world.sealstackPool, side, BRUSH_Z + BALANCE.director.spawnDistanceU);
     world.nextSealstackAtDistanceU =
       world.distanceU + jitteredInterval(world.rng, BALANCE.director.sealstackIntervalU);
+  }
+
+  if (world.distanceU >= world.nextInkPoolAtDistanceU) {
+    const half = BALANCE.lane.halfWidth * BALANCE.wetness.poolLateralRangeFraction;
+    const x = world.rng.range('director', -half, half);
+    spawnInkPool(world.inkPoolPool, x, BRUSH_Z + BALANCE.director.spawnDistanceU);
+    world.nextInkPoolAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.wetness.poolSpacingU);
   }
 }
 

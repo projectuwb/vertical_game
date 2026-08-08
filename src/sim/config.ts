@@ -110,6 +110,12 @@ const balance = {
     poolSpacingU: 140,
     dryFireRateMult: 0.5,
     dryDesaturateFraction: 0.6,
+    // Neither given a number in GAME_DESIGN.md §6. Hit radius wider than the projectile
+    // hit radius (0.6u) since this is the Brush's own footprint passing over a puddle,
+    // not a pinpoint shot; lateral range keeps pools off the very edge of the lane so
+    // they're always reachable without hugging a verge. Logged in DECISIONS.md.
+    poolHitRadiusU: 1.2,
+    poolLateralRangeFraction: 0.85,
   },
   flourish: {
     chargeTimeS: 0.35,
@@ -324,6 +330,10 @@ const balance = {
     // At most one or two Sealstack pairs are ever in flight at once (§7.2's ~220u
     // spacing); 16 is generous headroom.
     sealstackCapacity: 16,
+    // Ink pools spawn every ~140u (wetness.poolSpacingU) and are consumed the instant
+    // they're passed (hit or missed) — at most one or two are ever in flight; 8 is
+    // generous headroom.
+    inkPoolCapacity: 8,
   },
 
   // Projectile-vs-Blot hit radius: not given a number anywhere in either spec (neither
