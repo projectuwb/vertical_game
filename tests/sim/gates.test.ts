@@ -5,6 +5,7 @@ import { createLine, type LineState } from '../../src/sim/line.js';
 import {
   applyGateEffect,
   createTemperState,
+  gateEffectLabel,
   generateGatePair,
   isGenuineDilemma,
   isLegalPair,
@@ -177,5 +178,48 @@ describe("applyGateEffect — gate maths order (conversion applies after count c
     });
     expect(r.line.strokes).toHaveLength(10);
     expect(r.line.strokes.every((s) => s.class === 'harai')).toBe(true);
+  });
+});
+
+// Task 7.11: the exact literal strings GAME_DESIGN.md §7.2 gives for each Gate family —
+// `×2`, `×3`, `+12`, `+25`, `−10`, `÷2`, `→ Hane`/`→ Tome`/`→ Harai`, `Rate +20%`/
+// `Range +25%`/`Splash +30%`/`Wetness cap +25`. These stay literal (not derived from
+// BALANCE the way arithmeticLabel/temperLabel themselves are) specifically to catch a
+// drift between the *implementation's* live config and what the *design doc* actually
+// promises the player will see — unlike config.test.ts's formula-shape tests, which
+// intentionally don't pin literals because Task 4.6's balance pass is expected to retune
+// them; the Gates arithmetic/temper tables were never part of that pass (confirmed
+// unchanged since Task 2.6, see DECISIONS.md).
+describe('gateEffectLabel — matches GAME_DESIGN.md §7.2 exactly', () => {
+  it.each([
+    ['mul2', '×2'],
+    ['mul3', '×3'],
+    ['addTwelve', '+12'],
+    ['addTwentyFive', '+25'],
+    ['subTen', '−10'],
+    ['divTwo', '÷2'],
+  ] as const)('arithmeticOp %s → %s', (op, expected) => {
+    expect(gateEffectLabel({ arithmeticOp: op })).toBe(expected);
+  });
+
+  it.each([
+    ['hane', '→ Hane'],
+    ['tome', '→ Tome'],
+    ['harai', '→ Harai'],
+  ] as const)('conversionTarget %s → %s', (target, expected) => {
+    expect(gateEffectLabel({ conversionTarget: target })).toBe(expected);
+  });
+
+  it.each([
+    ['rate', 'Rate +20%'],
+    ['range', 'Range +25%'],
+    ['splash', 'Splash +30%'],
+    ['wetnessCap', 'Wetness cap +25'],
+  ] as const)('temperStat %s → %s', (stat, expected) => {
+    expect(gateEffectLabel({ temperStat: stat })).toBe(expected);
+  });
+
+  it('joins a compound Sealed-reveal effect (arithmetic + conversion) into one label', () => {
+    expect(gateEffectLabel({ arithmeticOp: 'mul2', conversionTarget: 'tome' })).toBe('×2 → Tome');
   });
 });

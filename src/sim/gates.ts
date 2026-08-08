@@ -3,7 +3,7 @@
 import type { RngRegistry } from '../core/rng.js';
 import { BALANCE } from './config.js';
 import { setLineCount, type LineState, type LineStroke } from './line.js';
-import type { StrokeClass } from './stroke.js';
+import { STROKE_CLASS_DISPLAY_NAME, type StrokeClass } from './stroke.js';
 
 export type ArithmeticOp = 'mul2' | 'mul3' | 'addTwelve' | 'addTwentyFive' | 'subTen' | 'divTwo';
 export type TemperStat = 'rate' | 'range' | 'splash' | 'wetnessCap';
@@ -30,6 +30,57 @@ export interface Gate {
 export interface GatePair {
   readonly left: Gate;
   readonly right: Gate;
+}
+
+function arithmeticLabel(op: ArithmeticOp): string {
+  const a = BALANCE.gates.arithmetic;
+  switch (op) {
+    case 'mul2':
+      return `×${a.mul2}`;
+    case 'mul3':
+      return `×${a.mul3}`;
+    case 'addTwelve':
+      return `+${a.addTwelve}`;
+    case 'addTwentyFive':
+      return `+${a.addTwentyFive}`;
+    case 'subTen':
+      return `−${Math.abs(a.subTen)}`;
+    case 'divTwo':
+      return `÷${Math.round(1 / a.divTwo)}`;
+  }
+}
+
+function temperLabel(stat: TemperStat): string {
+  const t = BALANCE.gates.temper;
+  switch (stat) {
+    case 'rate':
+      return `Rate +${Math.round(t.rateBonus * 100)}%`;
+    case 'range':
+      return `Range +${Math.round(t.rangeBonus * 100)}%`;
+    case 'splash':
+      return `Splash +${Math.round(t.splashBonus * 100)}%`;
+    case 'wetnessCap':
+      return `Wetness cap +${t.wetnessCapBonus}`;
+  }
+}
+
+/**
+ * The exact display strings GAME_DESIGN.md §7.2 gives per family (`×2`, `→ Tome`,
+ * `Rate +20%`, ...), derived from `BALANCE.gates`'s own live values rather than
+ * hardcoded literals, so this stays correct if those numbers are ever retuned. Task
+ * 7.11: the render-facing use (`road.ts`'s `drawGatePair`) only ever calls this on a
+ * *known* (non-Sealed) Gate's effect, which always has exactly one field set — the
+ * multi-field join below exists only so a Sealed gate's post-resolution combined effect
+ * (arithmetic + conversion, see the `GateEffect` doc comment) would still produce a
+ * sensible label if some future caller ever needed one, not because today's render path
+ * uses it.
+ */
+export function gateEffectLabel(effect: GateEffect): string {
+  const parts: string[] = [];
+  if (effect.arithmeticOp !== undefined) parts.push(arithmeticLabel(effect.arithmeticOp));
+  if (effect.conversionTarget !== undefined) parts.push(`→ ${STROKE_CLASS_DISPLAY_NAME[effect.conversionTarget]}`);
+  if (effect.temperStat !== undefined) parts.push(temperLabel(effect.temperStat));
+  return parts.join(' ');
 }
 
 const GOOD_ARITHMETIC_OPS: readonly ArithmeticOp[] = ['mul2', 'mul3', 'addTwelve', 'addTwentyFive'];

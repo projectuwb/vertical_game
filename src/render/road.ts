@@ -11,7 +11,7 @@ import type { ProjectionParams } from './camera.js';
 import { project, type ProjectedPoint } from './projection.js';
 import { PALETTE } from './palette.js';
 import { BALANCE } from '../sim/config.js';
-import type { Gate, GatePair } from '../sim/gates.js';
+import { gateEffectLabel, type Gate, type GatePair } from '../sim/gates.js';
 import type { Pool } from '../core/pool.js';
 import type { Sealstack } from '../sim/sealstacks.js';
 import { CLASS_COLOR } from './strokes.js';
@@ -201,6 +201,77 @@ function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): 
 const GATE_HEIGHT_U = 1.6;
 const GATE_THICKNESS_U = 0.15;
 const SEALSTACK_HEIGHT_U = 1.2;
+// Task 7.11, GAME_DESIGN.md §12: "Gate numbers are the loudest type in the game — set
+// them enormous, at Shippori's heaviest weight, with a bone stroke on the vermilion
+// fill." Applied to every non-Sealed family's label (§7.2 gives a literal display
+// string for all three — arithmetic, conversion, temper — not just numeric ones), since
+// this is the one typographic rule §12 states for Gates as a UI element, not a rule
+// specific to the arithmetic family alone.
+const GATE_LABEL_HEIGHT_U = 0.95; // roughly mid-door — GATE_HEIGHT_U is 1.6
+const GATE_LABEL_FONT_SIZE_U = 1.05; // "enormous" relative to the 1.6-tall door it sits on
+const GATE_LABEL_STROKE_FRACTION = 0.09; // stroke width as a fraction of font size
+const SEAL_MARK_RADIUS_U = 0.45;
+
+function drawSealMark(ctx: CanvasRenderingContext2D, params: ProjectionParams, centerX: number, z: number): void {
+  const point = project(centerX, GATE_LABEL_HEIGHT_U, z - GATE_THICKNESS_U / 2, params);
+  const r = Math.max(3, SEAL_MARK_RADIUS_U * point.scale * params.unit);
+  ctx.save();
+  ctx.strokeStyle = PALETTE.bone;
+  ctx.lineWidth = Math.max(1, r * 0.18);
+  ctx.beginPath();
+  ctx.arc(point.screenX, point.screenY, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = PALETTE.bone;
+  ctx.beginPath();
+  ctx.arc(point.screenX, point.screenY, r * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** How much of the door's own projected width the label may fill before "enormous"
+ *  starts spilling into the *other* half's label — the door itself only spans 80% of a
+ *  lane-half (`drawGateHalf`'s own 10%-each-side inset), so this stays comfortably clear
+ *  of the lane's centre line even at 1.0. */
+const GATE_LABEL_MAX_WIDTH_FRACTION = 0.92;
+
+function drawGateLabel(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  gate: Gate,
+  left: number,
+  right: number,
+  z: number,
+): void {
+  const centerX = (left + right) / 2;
+  const point = project(centerX, GATE_LABEL_HEIGHT_U, z - GATE_THICKNESS_U / 2, params);
+  const availableWidthPx = Math.abs(project(right, GATE_LABEL_HEIGHT_U, z, params).screenX - project(left, GATE_LABEL_HEIGHT_U, z, params).screenX);
+  const label = gateEffectLabel(gate.effect);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // "Enormous" (GAME_DESIGN.md §12) up to whatever the door's own width can hold without
+  // the label bleeding into its neighbour's — measured, not guessed, since label length
+  // varies a lot across families ("×2" vs "Wetness cap +25").
+  let fontPx = Math.max(9, GATE_LABEL_FONT_SIZE_U * point.scale * params.unit);
+  ctx.font = `800 ${fontPx}px "Shippori Mincho B1", serif`;
+  const measuredWidthPx = ctx.measureText(label).width;
+  const maxWidthPx = availableWidthPx * GATE_LABEL_MAX_WIDTH_FRACTION;
+  if (measuredWidthPx > maxWidthPx) {
+    fontPx *= maxWidthPx / measuredWidthPx;
+    ctx.font = `800 ${fontPx}px "Shippori Mincho B1", serif`;
+  }
+
+  ctx.lineWidth = Math.max(1, fontPx * GATE_LABEL_STROKE_FRACTION);
+  ctx.strokeStyle = PALETTE.bone;
+  ctx.fillStyle = PALETTE.vermilion;
+  // Stroke first, fill on top — the stroke straddles the glyph outline (half in, half
+  // out), so filling afterward covers the inner half and leaves a clean bone border.
+  ctx.strokeText(label, point.screenX, point.screenY);
+  ctx.fillText(label, point.screenX, point.screenY);
+  ctx.restore();
+}
 
 function gateColor(gate: Gate): string {
   if (gate.family === 'sealed') return PALETTE.blot;
@@ -232,6 +303,12 @@ function drawGateHalf(
     ],
     gateColor(gate),
   );
+
+  if (gate.family === 'sealed') {
+    drawSealMark(ctx, params, (left + right) / 2, z);
+  } else {
+    drawGateLabel(ctx, params, gate, left, right, z);
+  }
 }
 
 /** A Gate pair (GAME_DESIGN.md §7.2): two half-lane doors. Family colour-coded — Sealed
