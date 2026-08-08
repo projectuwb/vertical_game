@@ -153,6 +153,11 @@ export interface World {
   previousHolding: boolean;
 
   blotKilled: number;
+  /** Highest `line.strokes.length` has ever reached this Passage — GAME_DESIGN.md §10's
+   *  run-summary "peak Line" stat. Tracked on World itself (rather than externally, as
+   *  the harness used to) so both the harness and the real run-summary display (Task
+   *  2.11) read the same single source of truth. */
+  peakLineCount: number;
 
   isDead: boolean;
   deathCause: DeathCause | null;
@@ -195,6 +200,7 @@ export function createWorld(seed: number): World {
     previousHolding: false,
 
     blotKilled: 0,
+    peakLineCount: BALANCE.line.startCount,
 
     isDead: false,
     deathCause: null,
@@ -319,6 +325,10 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
 
   updateInkPoolMotion(world.inkPoolPool, dtFixed);
   world.wetness = resolveInkPoolContact(world.inkPoolPool, world.wetness, brushX, BRUSH_Z);
+
+  if (world.line.strokes.length > world.peakLineCount) {
+    world.peakLineCount = world.line.strokes.length;
+  }
 
   if (world.isDead) return; // no point directing more content at a Passage that's over
 

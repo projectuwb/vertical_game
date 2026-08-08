@@ -27,7 +27,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 - [x] **2.8 Wetness and Flourish.** Meter, drain/refill, ink pools, dry state, charge-and-release Flourish with its costs and effects. *Done when: the economy is unit-tested and the dry state is visibly obvious without reading a bar.*
 - [x] **2.9 Phrases.** Front-row detection, three Phrase attacks, 5-of-a-kind escalation. *Done when: phrase detection is unit-tested against 30 hand-written formations and each Phrase is visually distinct at a glance.*
 - [x] **2.10 The ink trail.** The signature element per §12 — width by N, colour by class mix, bleeding edges, capillary wobble, 6%-alpha accumulation layer. *Done when: a Line of 5 and a Line of 300 produce visibly different, beautiful trails at 60fps. Spend real effort here.*
-- [ ] **2.11 Death and restart.** Line-to-zero end state, freeze frame, ink bleeding out across the road, straight to summary. *Done when: death to next Passage is two taps and under 3s.*
+- [x] **2.11 Death and restart.** Line-to-zero end state, freeze frame, ink bleeding out across the road, straight to summary. *Done when: death to next Passage is two taps and under 3s.*
 
 ## Phase 3 — The Seals
 
@@ -74,3 +74,4 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 - [ ] **7.4** A photo mode that renders the ink trail of your best Passage as a downloadable PNG scroll.
 - [ ] **7.5** Palette variants unlocked by milestones (must keep §12 legibility rules).
 - [ ] **7.6** Colour-blind simulation dev tool for verifying 5.3 automatically.
+- [ ] **7.7** Vendor the real fonts (TECH_SPEC.md §7): Shippori Mincho B1 and Zen Kaku Gothic New, subset to Latin+digits+punctuation, as `.woff2` under `/src/assets/fonts` with `OFL.txt` for each. Task 2.11 introduced the game's first on-screen text using a system font stack fallback (logged in DECISIONS.md) rather than blocking on font sourcing/subsetting tooling; this task replaces that fallback with the real faces everywhere text appears.

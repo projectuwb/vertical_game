@@ -24,15 +24,17 @@ import { BLOT_CLASSES, spawnBlot, type Blot } from './sim/blot.js';
 import { pickSlipClass, spawnSlip, type Slip, type SlipKind } from './sim/slips.js';
 import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
-import { createWorld, stepWorld, type World } from './sim/world.js';
+import { computeGoldLeaf, createWorld, stepWorld, type World } from './sim/world.js';
 import { RngRegistry } from './core/rng.js';
+import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
 import { computeProjectionParams } from './render/camera.js';
 import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater, resetRoadTrailBase } from './render/road.js';
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
-import { drawInkTrail } from './render/trail.js';
+import { drawInkBleed, drawInkTrail } from './render/trail.js';
+import { drawDeathSummary, inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
@@ -127,10 +129,24 @@ function bootstrap(): void {
   // tooling, not part of a replayable Passage.
   const debugRng = new RngRegistry(Date.now());
 
+  // Real wall-clock time of death (Task 2.11) — world.timeS itself freezes the instant
+  // isDead flips (stepWorld returns before advancing it), so the death sequence's own
+  // timing (ink bleed, summary reveal) has to come from somewhere that keeps ticking.
+  let deathAtRealMs: number | null = null;
+
+  function restart(): void {
+    world = createWorld(Date.now());
+    deathAtRealMs = null;
+    layers.requestRoadTrailReset();
+  }
+
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
       const frame = input.sample(dtFixed);
       stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
+      if (world.isDead && deathAtRealMs === null) {
+        deathAtRealMs = nowMs();
+      }
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();
@@ -160,6 +176,11 @@ function bootstrap(): void {
       drawRoad(layers.roadTrailCtx, params, world.distanceU);
       drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
 
+      const deathElapsedS = deathAtRealMs === null ? 0 : (nowMs() - deathAtRealMs) / 1000;
+      if (world.isDead) {
+        drawInkBleed(layers.roadTrailCtx, params, brushX, BRUSH_Z, inkBleedFraction(deathElapsedS));
+      }
+
       layers.clearActors();
       drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z);
       drawSlips(layers.actorsCtx, params, world.slipPool);
@@ -173,6 +194,27 @@ function bootstrap(): void {
       drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);
       drawBrush(layers.actorsCtx, params, brushX, BRUSH_Z, world.wetness, world.flourish, world.timeS);
 
+      if (world.isDead) {
+        drawDeathSummary(
+          layers.hudCtx,
+          metrics.cssWidth,
+          metrics.cssHeight,
+          {
+            distanceU: world.distanceU,
+            peakLine: world.peakLineCount,
+            blotKilled: world.blotKilled,
+            sealsBroken: 0, // Seals don't exist yet (Task 3.x)
+            goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, 0),
+            deathCause: world.deathCause ?? 'blot',
+          },
+          deathElapsedS,
+        );
+        layers.markHudDirty();
+      } else if (layers.isHudDirty) {
+        layers.hudCtx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
+        layers.markHudClean();
+      }
+
       layers.compositeInto(viewport.ctx);
     },
   };
@@ -182,6 +224,23 @@ function bootstrap(): void {
   runInBrowser(loop);
 
   const debugRequested = new URLSearchParams(window.location.search).get('debug') === '1';
+
+  // GAME_DESIGN.md §10: "from death to next Passage in two taps and under 3 seconds" —
+  // any pointer press restarts once dead, with no confirmation step; the death-summary
+  // reveal (hud.ts) never blocks this, so a player who taps immediately skips straight
+  // past the animation into a new Passage. Keyboard restart is desktop-only and skipped
+  // under ?debug=1, where a stray keypress meant for a debug key would otherwise
+  // immediately undo whatever debug state was being tested — the dedicated KeyR handler
+  // below covers restart for debug sessions instead.
+  viewport.canvas.addEventListener('pointerdown', () => {
+    if (world.isDead) restart();
+  });
+  if (!debugRequested) {
+    document.addEventListener('keydown', () => {
+      if (world.isDead) restart();
+    });
+  }
+
   if (debugRequested) {
     mountDebugOverlay(loop, app);
 
@@ -221,7 +280,7 @@ function bootstrap(): void {
         spawnSealstack(world.sealstackPool, debugRng.chance('cosmetic', 0.5) ? 'left' : 'right', 40);
       }
       if (e.code === 'KeyR') {
-        world = createWorld(Date.now());
+        restart();
       }
       if (e.code === 'KeyJ') {
         world.line = buildDebugPureLine('hane', BALANCE.phrase.rowSize);

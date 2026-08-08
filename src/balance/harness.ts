@@ -66,7 +66,6 @@ function parseArgs(argv: readonly string[]): CliArgs {
 function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number): RunResult {
   const world = createWorld(seed);
   const botState = createBotState(seed);
-  let peakLine = world.line.strokes.length;
   let lastGateResolvedAtS: number | null = null;
   const maxSteps = Math.ceil(maxPassageS / FIXED_DT);
 
@@ -76,7 +75,6 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number)
     const input = decideInput(strategy, world, FIXED_DT, botState);
     stepWorld(world, FIXED_DT, input);
     if (hadGate && world.currentGatePair === null) lastGateResolvedAtS = world.timeS;
-    if (world.line.strokes.length > peakLine) peakLine = world.line.strokes.length;
     steps++;
   }
 
@@ -88,7 +86,7 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number)
     strategy,
     seed,
     passageLengthS: world.timeS,
-    peakLine,
+    peakLine: world.peakLineCount,
     deathCause,
     goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, 0),
     distanceU: world.distanceU,

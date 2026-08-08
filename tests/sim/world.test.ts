@@ -17,6 +17,7 @@ describe('createWorld', () => {
     expect(world.slipPool.activeCount).toBe(0);
     expect(world.isDead).toBe(false);
     expect(world.deathCause).toBeNull();
+    expect(world.peakLineCount).toBe(BALANCE.line.startCount);
   });
 
   it('is deterministic for a given seed', () => {
@@ -115,6 +116,18 @@ describe('stepWorld', () => {
     }
 
     expect(grew).toBe(true);
+  });
+
+  it('peakLineCount tracks the highest Line size reached and never drops when the Line later shrinks', () => {
+    const world = createWorld(1);
+    const grownCount = BALANCE.line.startCount + 2;
+    world.line = { strokes: Array.from({ length: grownCount }, () => ({ class: 'hane' as const })) };
+    stepWorld(world, DT, NO_INPUT);
+    expect(world.peakLineCount).toBe(grownCount);
+
+    world.line = { strokes: world.line.strokes.slice(0, 1) };
+    stepWorld(world, DT, NO_INPUT);
+    expect(world.peakLineCount).toBe(grownCount); // does not fall back down with the Line
   });
 
   it('missed Slips do not leak the pool over a long, unshot Passage (regression)', () => {

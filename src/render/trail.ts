@@ -126,3 +126,37 @@ export function drawInkTrail(
   fillQuad(ctx, corners, color);
   ctx.restore();
 }
+
+// Death sequence (Task 2.11, TASKS.md: "ink bleeding out across the road") — a distinct
+// visual from ordinary play, not just a bigger version of the normal trail: it grows
+// from nothing to BLEED_MAX_WIDTH_U as `bleedFraction` (main.ts's real-elapsed-time-since-
+// death, via hud.ts's inkBleedFraction) goes 0..1, in the Blot colour rather than the
+// Line's class mix — the Line has just been consumed to 0, so there's no class mix left
+// to blend, and "the ink going dark" reads correctly as the Passage ending.
+const BLEED_MAX_WIDTH_U = 5;
+const BLEED_MAX_DEPTH_U = 2;
+const BLEED_ALPHA = 0.6;
+
+export function drawInkBleed(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  brushX: number,
+  brushZ: number,
+  bleedFraction: number,
+): void {
+  if (bleedFraction <= 0) return;
+  const halfWidth = (BLEED_MAX_WIDTH_U * bleedFraction) / 2;
+  const nearZ = brushZ - BLEED_MAX_DEPTH_U * bleedFraction * 0.3;
+  const farZ = brushZ + BLEED_MAX_DEPTH_U * bleedFraction;
+  const corners: Quad = [
+    project(brushX - halfWidth, 0, nearZ, params),
+    project(brushX + halfWidth, 0, nearZ, params),
+    project(brushX + halfWidth, 0, farZ, params),
+    project(brushX - halfWidth, 0, farZ, params),
+  ];
+
+  ctx.save();
+  ctx.globalAlpha = BLEED_ALPHA * bleedFraction;
+  fillQuad(ctx, corners, PALETTE.blot);
+  ctx.restore();
+}

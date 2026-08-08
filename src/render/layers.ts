@@ -92,6 +92,14 @@ export class OffscreenLayers {
     this.roadTrailStale = false;
   }
 
+  /** Forces the next frame to repaint the road+trail base from scratch instead of
+   *  accumulating on top of what's there — GAME_DESIGN.md §7.4's "visually reset the ink
+   *  trail," used on restart (Task 2.11) so a new Passage doesn't inherit the previous
+   *  one's ink/death-bleed. */
+  requestRoadTrailReset(): void {
+    this.roadTrailStale = true;
+  }
+
   get isHudDirty(): boolean {
     return this.hudDirty;
   }
