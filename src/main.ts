@@ -190,7 +190,10 @@ function bootstrap(): void {
   function beginPassage(): void {
     const seed = Date.now();
     lastSeed = seed;
-    world = createWorld(seed, profile.upgradeLevels);
+    // GAME_DESIGN.md §13: the scripted opening only ever applies to a profile's very
+    // first-ever Passage — `recordRunResult` (in `handlePassageDeath`) increments
+    // `totalPassages` the instant this one ends, so it can never fire twice.
+    world = createWorld(seed, profile.upgradeLevels, profile.totalPassages === 0);
     attachSfx(world.events); // this Passage's own fresh event bus — the old one (and its listeners) is now unreachable
     deathAtRealMs = null;
     layers.requestRoadTrailReset();

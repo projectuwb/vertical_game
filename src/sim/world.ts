@@ -130,6 +130,15 @@ export interface WorldInput {
 
 export type DeathCause = 'blot' | 'gate' | 'sealstack' | 'seal';
 
+/** Task 4.5's scripted opening — see World.firstRunTeaching's own doc comment. Stages
+ *  fire strictly in this order; 'done' means either the sequence finished normally or
+ *  the window elapsed without every stage firing (a defensive fallback, not something
+ *  a real 60Hz-stepped Passage should ever actually hit). */
+export type FirstRunTeachingStage = 'slip' | 'gate' | 'wave' | 'settling' | 'done';
+export interface FirstRunTeachingState {
+  readonly stage: FirstRunTeachingStage;
+}
+
 export interface World {
   readonly rng: RngRegistry;
   /** sim → render/audio signalling (events.ts's GameEvents, Task 4.4) — a fresh bus per
@@ -181,6 +190,16 @@ export interface World {
    *  uses. */
   growthErasedUntilS: number;
 
+  /** Task 4.5, GAME_DESIGN.md §13: "the first 20 seconds of a first-ever Passage
+   *  present exactly one Slip run, then one Gate pair, then one wave, with nothing
+   *  else on screen." Null for every ordinary Passage (`createWorld`'s default) —
+   *  `stage: 'done'` once the scripted sequence has finished, at which point the
+   *  Director's normal cadence runs completely unmodified for the rest of the
+   *  Passage. The scripting only ever *delays* normal content, never removes it: every
+   *  `next*At*` field this suppresses gets set to a real post-window schedule the
+   *  moment its stage fires, the same values a normal spawn would have produced. */
+  firstRunTeaching: FirstRunTeachingState | null;
+
   wetness: WetnessState;
   flourish: FlourishState;
   phrase: PhraseState;
@@ -213,10 +232,13 @@ export interface World {
 
 /** `upgradeLevels` defaults to zero everywhere (`NO_UPGRADES`) — every existing caller
  *  (the harness, main.ts before Task 4.3's screens wire a real Profile in, every test)
- *  keeps behaving exactly as before without passing anything. */
+ *  keeps behaving exactly as before without passing anything. `firstRunTeaching`
+ *  defaults to false the same way — only main.ts's real `beginPassage` ever passes
+ *  true, and only for a Profile with `totalPassages === 0` (Task 4.5). */
 export function createWorld(
   seed: number,
   upgradeLevels: Readonly<Record<InkstoneTrackId, number>> = NO_UPGRADES,
+  firstRunTeaching = false,
 ): World {
   const rng = new RngRegistry(seed);
   const upgradeEffects = computeUpgradeEffects(upgradeLevels);
@@ -257,6 +279,7 @@ export function createWorld(
     sealDefinition: null,
     sealsBroken: 0,
     growthErasedUntilS: 0,
+    firstRunTeaching: firstRunTeaching ? { stage: 'slip' } : null,
 
     wetness: createWetnessState(wetnessCap),
     flourish: createFlourishState(),
@@ -531,6 +554,11 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   const mercyActive = isMercyActive(world.mercy, world.timeS);
   const pressure = computePressure(world.timeS, world.line.strokes.length);
 
+  if (world.firstRunTeaching !== null && world.firstRunTeaching.stage !== 'done') {
+    world.firstRunTeaching = stepFirstRunTeaching(world, pressure, mercyActive);
+  }
+  const teaching = isFirstRunTeachingActive(world);
+
   maybeStartSealEncounter(world);
 
   // GAME_DESIGN.md §8.2: "Seals do not block Slips — Slip runs continue during the
@@ -539,8 +567,10 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   // player's attention belongs to. `nextWaveAtTimeS` etc. simply stop being checked
   // rather than being advanced, so nothing "catches up" in a burst once the Seal ends —
   // the next wave/Gate/Sealstack just spawns as soon as its (already-passed) threshold
-  // is checked again, exactly once.
-  if (world.seal === null) {
+  // is checked again, exactly once. Task 4.5's scripted opening (`teaching`) pauses all
+  // three the same way, for the same reason: `stepFirstRunTeaching` above is the only
+  // thing allowed to spawn a wave/Gate during that window.
+  if (world.seal === null && !teaching) {
     if (world.timeS >= world.nextWaveAtTimeS) {
       spawnWave(world, pressure, mercyActive);
       world.nextWaveAtTimeS = world.timeS + computeWaveIntervalS(world.timeS);
@@ -560,17 +590,70 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     }
   }
 
-  if (world.distanceU >= world.nextSlipBudgetAtDistanceU && world.timeS >= world.growthErasedUntilS) {
+  if (world.distanceU >= world.nextSlipBudgetAtDistanceU && world.timeS >= world.growthErasedUntilS && !teaching) {
     spawnSlipRun(world, pressure, mercyActive);
     world.nextSlipBudgetAtDistanceU = world.distanceU + BALANCE.director.slipBudget.perU;
   }
 
-  if (world.distanceU >= world.nextInkPoolAtDistanceU) {
+  if (world.distanceU >= world.nextInkPoolAtDistanceU && !teaching) {
     const half = BALANCE.lane.halfWidth * BALANCE.wetness.poolLateralRangeFraction;
     const x = world.rng.range('director', -half, half);
     spawnInkPool(world.inkPoolPool, x, BRUSH_Z + BALANCE.director.spawnDistanceU);
     world.nextInkPoolAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.wetness.poolSpacingU);
   }
+}
+
+function isFirstRunTeachingActive(world: World): boolean {
+  return world.firstRunTeaching !== null && world.firstRunTeaching.stage !== 'done';
+}
+
+/**
+ * Task 4.5, GAME_DESIGN.md §13's scripted opening. Advances at most one stage per
+ * step, in fixed order (slip -> gate -> wave -> done); each stage spawns exactly like
+ * its normal Director counterpart (`spawnWave`/`spawnSlipRun`) — "scripted" only ever
+ * means "on a fixed clock instead of the usual one," never a different shape of
+ * content. Every schedule the window suppressed is re-armed together, fresh from the
+ * current distance/time, only once the whole sequence reaches 'done' — not
+ * individually as each stage fires — so normal cadence resumes smoothly the instant
+ * teaching ends instead of an immediate catch-up burst of everything whose stale,
+ * long-since-passed pre-window threshold gets checked again the moment suppression
+ * lifts (unlike the Seal-pause case elsewhere in this file, this window has a known,
+ * short, fixed duration, so smoothing the handoff is worth the extra bookkeeping).
+ */
+function stepFirstRunTeaching(world: World, pressure: number, mercyActive: boolean): FirstRunTeachingState {
+  const t = BALANCE.firstRunTeaching;
+  const stage = (world.firstRunTeaching as FirstRunTeachingState).stage;
+
+  if (stage === 'slip' && world.timeS >= t.slipAtTimeS) {
+    spawnSlipRun(world, pressure, mercyActive);
+    return { stage: 'gate' };
+  }
+  if (stage === 'gate' && world.timeS >= t.gateAtTimeS) {
+    world.currentGatePair = generateGatePair(world.rng);
+    world.gatePairZ = BRUSH_Z + BALANCE.director.spawnDistanceU;
+    return { stage: 'wave' };
+  }
+  if (stage === 'wave' && world.timeS >= t.waveAtTimeS) {
+    spawnWave(world, pressure, mercyActive);
+    return { stage: 'settling' }; // the wave has fired, but stays "nothing else" until the full window elapses
+  }
+  if (world.timeS >= t.windowS) {
+    // Reached however 'stage' currently reads — the normal 'settling' path (the wave
+    // already fired, just waiting out the rest of the window), or a defensive
+    // catch-up if a misconfigured stage time somehow exceeded windowS. Either way the
+    // 20s window is over now; hand off to normal cadence exactly once.
+    resumeNormalDirectorCadence(world);
+    return { stage: 'done' };
+  }
+  return { stage };
+}
+
+function resumeNormalDirectorCadence(world: World): void {
+  world.nextWaveAtTimeS = world.timeS + computeWaveIntervalS(world.timeS);
+  world.nextGateAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.gates.pairIntervalU);
+  world.nextSlipBudgetAtDistanceU = world.distanceU + BALANCE.director.slipBudget.perU;
+  world.nextSealstackAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.director.sealstackIntervalU);
+  world.nextInkPoolAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.wetness.poolSpacingU);
 }
 
 function spawnWave(world: World, pressure: number, mercyActive: boolean): void {

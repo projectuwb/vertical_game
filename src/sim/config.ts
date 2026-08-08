@@ -383,6 +383,18 @@ const balance = {
     secondDraft: { reviveLevels: [1, 4, 8], revivePeakFraction: 0.35, baseCost: 200 },
   },
 
+  // §13: "the first 20 seconds of a first-ever Passage present exactly one Slip run,
+  // then one Gate pair, then one wave, with nothing else on screen." windowS (20) is
+  // named exactly; the three stage times aren't — spread across the window with real
+  // room between them so each one has time to register before the next appears, and
+  // the last (wave) still lands comfortably before the 20s ceiling.
+  firstRunTeaching: {
+    slipAtTimeS: 3,
+    gateAtTimeS: 9,
+    waveAtTimeS: 15,
+    windowS: 20,
+  },
+
   // §11 Balance targets — thresholds the harness (TECH_SPEC.md §6) checks runs against.
   balanceTargets: {
     passageLengthSZeroUpgrades: { min: 55, max: 85 },
