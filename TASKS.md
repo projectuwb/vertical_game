@@ -39,7 +39,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 
 ## Phase 4 — Meta and shell
 
-- [ ] **4.1 Profile and persistence.** Schema, migrations, safe storage wrapper, export/import. *Done when: migration tests pass and the game runs correctly with storage throwing on every call.*
+- [x] **4.1 Profile and persistence.** Schema, migrations, safe storage wrapper, export/import. *Done when: migration tests pass and the game runs correctly with storage throwing on every call.*
 - [ ] **4.2 Economy.** Gold Leaf formula, all eight Inkstone tracks with cost curves, application of every effect into the sim. *Done when: each upgrade's effect is unit-tested end to end, not just stored.*
 - [ ] **4.3 Screens.** Title, run summary, Inkstone, settings — per `GAME_DESIGN.md` §10 and §12, keyboard-navigable, no confirmation dialogs. *Done when: every screen is finished, responsive, and reachable; no placeholder text anywhere.*
 - [ ] **4.4 Audio.** WebAudio synthesis for all SFX and the generative music per §12, with a mixer, mute persistence, and a hard rule that audio never blocks the loop. *Done when: no audio file exists in the repo and every event in §12 has a distinct sound.*
