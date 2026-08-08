@@ -137,6 +137,19 @@ const balance = {
     // 2.5 acceptance bar of a Stroke landing within 1.2s of the kill. Logged in
     // DECISIONS.md.
     recruitTravelDurationS: 0.6,
+    // A run is staked along one verge at increasing z, not spread across the lane at one
+    // instant — GAME_DESIGN.md §7.1 says "staked along... the verges" but gives no
+    // spacing/offset numbers. 3.5u between Slips gives a clean one-at-a-time read at
+    // forward speed; 0.75 of the half-width keeps a run visibly off to one side without
+    // hugging the very edge. Logged in DECISIONS.md.
+    runZSpacingU: 3.5,
+    vergeOffsetFraction: 0.75,
+    // "Missing them costs nothing but opportunity" (GAME_DESIGN.md §7.1) — but nothing
+    // in the spec says an unshot Slip should occupy its pool slot forever. Despawning it
+    // once it's scrolled this far past the Brush keeps `pools.slipCapacity` from being a
+    // silent, run-length-dependent ceiling on how many Slip runs a Passage can ever
+    // offer (see DECISIONS.md).
+    missDespawnMarginU: 2,
   },
   gates: {
     pairIntervalU: 220,
@@ -242,6 +255,22 @@ const balance = {
       waveSizeMult: 1.35,
       crustShareBonus: 0.08,
     },
+    // Not given a number anywhere: how far ahead of the Brush new road content first
+    // appears. 45u gives just over 2s of warning at base forward speed (22u/s) —
+    // enough to react, short enough to stay readable at higher speeds. Also used as the
+    // Gate/Sealstack spawn distance so everything appears at a consistent range.
+    spawnDistanceU: 45,
+    // GAME_DESIGN.md §7.3 gives no Sealstack cadence at all; ~500u (roughly 2x a Gate
+    // pair's ~220u interval) reads as a heavier, rarer obstacle. Logged in
+    // DECISIONS.md. ±jitterFraction softens both this and the Gate interval so
+    // "roughly every Xu" doesn't read as a metronome.
+    sealstackIntervalU: 500,
+    intervalJitterFraction: 0.1,
+    /** Blot within a wave land at a shallow range of depths, not a flat wall. */
+    waveScatterDepthU: 8,
+    /** planSlipSpawn's chance of spending a mid-size budget on a +5 Slip instead of a
+     *  +1 run — GAME_DESIGN.md §9 gives the HP budget formula but not the spend split. */
+    slipSpendFiveChance: 0.3,
   },
 
   // §10 Structure — arcade + meta

@@ -7,6 +7,7 @@ import {
   createSlipPool,
   pickSlipClass,
   recruitCountFor,
+  resolveMissedSlips,
   resolveSlipDeaths,
   slipHitRadiusU,
   spawnSlip,
@@ -57,6 +58,39 @@ describe('updateSlipMotion', () => {
     for (let i = 0; i < 600; i++) updateSlipMotion(pool, dt); // 10s of world scroll
 
     expect(s.z).toBeLessThan(BALANCE.strokes.hane.rangeU);
+  });
+});
+
+describe('resolveMissedSlips', () => {
+  it('releases a Slip once it scrolls missDespawnMarginU past the Brush', () => {
+    const pool = createSlipPool();
+    const s = spawnSlip(pool, 'plusOne', 'hane', 0, -BALANCE.slips.missDespawnMarginU - 0.01);
+    if (s === undefined) throw new Error('spawn failed');
+
+    resolveMissedSlips(pool, 0);
+
+    expect(pool.activeCount).toBe(0);
+  });
+
+  it('leaves a Slip that has not yet crossed the despawn threshold untouched', () => {
+    const pool = createSlipPool();
+    const s = spawnSlip(pool, 'plusOne', 'hane', 0, 5);
+    if (s === undefined) throw new Error('spawn failed');
+
+    resolveMissedSlips(pool, 0);
+
+    expect(pool.activeCount).toBe(1);
+  });
+
+  it('does not release a dead (hp <= 0) Slip — that is resolveSlipDeaths\' job', () => {
+    const pool = createSlipPool();
+    const s = spawnSlip(pool, 'plusOne', 'hane', 0, -100);
+    if (s === undefined) throw new Error('spawn failed');
+    s.hp = 0;
+
+    resolveMissedSlips(pool, 0);
+
+    expect(pool.activeCount).toBe(1);
   });
 });
 

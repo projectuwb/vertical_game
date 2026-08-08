@@ -152,9 +152,10 @@ describe('resolveBlotDeaths', () => {
     if (alive === undefined || dead === undefined) throw new Error('spawn failed');
     dead.hp = 0;
 
-    resolveBlotDeaths(pool);
+    const killedCount = resolveBlotDeaths(pool);
 
     expect(pool.activeCount).toBe(1);
+    expect(killedCount).toBe(1);
     let survivorX = -999;
     pool.forEachActive((b) => (survivorX = b.x));
     expect(survivorX).toBe(0);

@@ -3,7 +3,12 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    // "dom" is here for types only (core/loop.ts's FixedStepLoop touches
+    // requestAnimationFrame/HTMLElement/Document) — the CLI harness never runs on a real
+    // DOM and never calls the methods that would need one; it only needs the whole of
+    // /core to typecheck as a program, since tsc compiles everything under "include"
+    // regardless of what the harness itself actually imports.
+    "lib": ["ES2022", "dom"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

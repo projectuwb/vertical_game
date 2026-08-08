@@ -127,12 +127,17 @@ export function resolveLineContact(pool: Pool<Blot>, brushZ: number): number {
  * pool indices ≥ the current scan position, so calling this mid-backward-iteration
  * (as collision.ts does) never revisits or skips an item — see the Pool.get() doc
  * comment in core/pool.ts for the general argument.
+ *
+ * Returns how many Blot actually died this step (not counting Splitter's spawned
+ * children) — the economy (Gold Leaf per kill, GAME_DESIGN.md §10) needs that count.
  */
-export function resolveBlotDeaths(pool: Pool<Blot>): void {
+export function resolveBlotDeaths(pool: Pool<Blot>): number {
+  let killedCount = 0;
   for (let i = pool.activeCount - 1; i >= 0; i--) {
     const b = pool.get(i);
     if (b.hp > 0) continue;
 
+    killedCount++;
     const wasSplitter = b.class === 'splitter';
     const deathX = b.x;
     const deathZ = b.z;
@@ -145,6 +150,7 @@ export function resolveBlotDeaths(pool: Pool<Blot>): void {
       spawnBlot(pool, 'smudge', deathX + offset, deathZ);
     }
   }
+  return killedCount;
 }
 
 export type BlotRenderTier = 'individual' | 'mass';

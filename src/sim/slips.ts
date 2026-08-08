@@ -50,6 +50,21 @@ export function recruitCountFor(kind: SlipKind): number {
 }
 
 /**
+ * Releases any Slip that has scrolled past the Brush without being shot down — "missing
+ * them costs nothing but opportunity" (GAME_DESIGN.md §7.1), but an unshot Slip must
+ * still eventually free its pool slot, or a long Passage that ignores Slips silently
+ * exhausts `pools.slipCapacity` and every later run stops offering them at all.
+ */
+export function resolveMissedSlips(pool: Pool<Slip>, brushZ: number): void {
+  const threshold = brushZ - BALANCE.slips.missDespawnMarginU;
+  for (let i = pool.activeCount - 1; i >= 0; i--) {
+    const s = pool.get(i);
+    if (s.hp <= 0) continue; // let resolveSlipDeaths release these
+    if (s.z < threshold) pool.release(s);
+  }
+}
+
+/**
  * Slips are staked road furniture, not autonomous walkers like Blot — they have no
  * speed stat of their own in GAME_DESIGN.md. What makes them approach the Brush is the
  * same thing that makes the road markings scroll: the world moves at forwardSpeed while
