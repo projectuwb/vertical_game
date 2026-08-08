@@ -281,7 +281,32 @@ const balance = {
       attackIntervalS: 2.2,
       beatGapS: 0.6,
     },
-    blank: { phases: 4, eraseDurationS: 3 },
+    // phases/eraseDurationS are named exactly in GAME_DESIGN.md §8.2. The Blank
+    // alternates its two named attacks — the erasure beam ("removes Slips and Gates
+    // from the road for 3s") and the conversion cone ("a cone that converts hit
+    // Strokes into Blot that then attack you") — one per attackIntervalS cooldown, never
+    // simultaneously: the beam targets the road/economy, not the Brush directly, so it
+    // has nothing to dodge; the cone is the one attack here that needs the "correct
+    // answer is a position" treatment. beamTelegraphS/coneTelegraphS (1.0s each) match
+    // the Press's telegraph length — comfortably above the 0.7s framework floor.
+    // coneHalfWidthU (1.75u) sits between the Press's gap (1.25u) and the Smear's arm
+    // (2u): a "cone" reads as a defined, not-too-wide band, narrower than the Smear's
+    // sweeping arm since it never moves once telegraphed. attackIntervalS (2.3s) sits
+    // between the Smear's 2.5s and the Press's 2.2s — none of these cadences are named
+    // in GAME_DESIGN.md. convertedBlotAheadZU (3u) is how far ahead of the Brush a
+    // converted Stroke's new Blot spawns: far enough that it isn't an unavoidable
+    // instant re-hit next step, close enough that leaving it alone costs you again
+    // within a second — the mechanical shape behind "the only Seal where losing feels
+    // like it compounds." Logged in DECISIONS.md.
+    blank: {
+      phases: 4,
+      eraseDurationS: 3,
+      beamTelegraphS: 1.0,
+      coneTelegraphS: 1.0,
+      coneHalfWidthU: 1.75,
+      attackIntervalS: 2.3,
+      convertedBlotAheadZU: 3,
+    },
   },
 
   // §9 The Spawn Director

@@ -3,3 +3,4 @@ export * from './framework.js';
 export * from './stub.js';
 export * from './smear.js';
 export * from './press.js';
+export * from './blank.js';

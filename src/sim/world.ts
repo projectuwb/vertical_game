@@ -160,6 +160,12 @@ export interface World {
   seal: SealEncounterState | null;
   sealDefinition: SealDefinition | null;
   sealsBroken: number;
+  /** The Blank's erasure beam (GAME_DESIGN.md §8.2): while `timeS < growthErasedUntilS`,
+   *  new Slip runs are suppressed — set alongside clearing the Slip pool and the current
+   *  Gate pair the instant a beam resolves. 0 outside of that window, same "quiescent
+   *  zero" shape every other `next*AtDistanceU`/`*RemainingS` field in World already
+   *  uses. */
+  growthErasedUntilS: number;
 
   wetness: WetnessState;
   flourish: FlourishState;
@@ -214,6 +220,7 @@ export function createWorld(seed: number): World {
     seal: null,
     sealDefinition: null,
     sealsBroken: 0,
+    growthErasedUntilS: 0,
 
     wetness: createWetnessState(),
     flourish: createFlourishState(),
@@ -387,6 +394,13 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
       world.line = removeStrokesFromFront(world.line, sealStep.strokesLost);
       killLineIfEmpty(world, 'seal');
     }
+    if (sealStep.growthEraseS !== undefined && sealStep.growthEraseS > 0) {
+      for (let i = world.slipPool.activeCount - 1; i >= 0; i--) {
+        world.slipPool.release(world.slipPool.get(i));
+      }
+      world.currentGatePair = null;
+      world.growthErasedUntilS = world.timeS + sealStep.growthEraseS;
+    }
 
     if (world.seal.status === 'broken') {
       world.sealsBroken++;
@@ -435,7 +449,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     }
   }
 
-  if (world.distanceU >= world.nextSlipBudgetAtDistanceU) {
+  if (world.distanceU >= world.nextSlipBudgetAtDistanceU && world.timeS >= world.growthErasedUntilS) {
     spawnSlipRun(world, pressure, mercyActive);
     world.nextSlipBudgetAtDistanceU = world.distanceU + BALANCE.director.slipBudget.perU;
   }

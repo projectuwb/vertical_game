@@ -91,12 +91,25 @@ export function resetRoadTrailBase(
  * lines (always the same screen position, so fade-then-redraw-opaque keeps them
  * permanently crisp) and this frame's dashes on top. Never clears — see
  * `resetRoadTrailBase` for the one-time base paint this depends on.
+ *
+ * `eraseMarkings` is the Blank's phase 4 (GAME_DESIGN.md §8.2: "erases the road
+ * markings entirely, leaving only the ink trail to navigate by") — skips the edge
+ * lines and dashes for this frame only (never touches the ink trail, painted
+ * separately into the same layer) so old marking ghosts already on the layer still
+ * fade away at the normal rate above rather than vanishing abruptly.
  */
-export function drawRoad(ctx: CanvasRenderingContext2D, params: ProjectionParams, scrollDistance: number): void {
+export function drawRoad(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  scrollDistance: number,
+  eraseMarkings = false,
+): void {
   ctx.save();
   ctx.globalAlpha = TRAIL_FADE_ALPHA;
   fillQuad(ctx, laneQuad(params), PALETTE.slate);
   ctx.restore();
+
+  if (eraseMarkings) return;
 
   drawEdgeLine(ctx, -LANE_HALF_WIDTH, params);
   drawEdgeLine(ctx, LANE_HALF_WIDTH, params);

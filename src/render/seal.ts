@@ -10,6 +10,7 @@ import { fillQuad, type Quad } from './strokes.js';
 import { stubActiveTelegraph } from '../sim/seals/stub.js';
 import { smearActiveVisual } from '../sim/seals/smear.js';
 import { pressActiveVisual } from '../sim/seals/press.js';
+import { blankActiveVisual } from '../sim/seals/blank.js';
 import type { SealEncounterState } from '../sim/seals/framework.js';
 import { computeSealZ, SEAL_X } from '../sim/world.js';
 import { BALANCE } from '../sim/config.js';
@@ -201,6 +202,54 @@ function drawPressVisual(ctx: CanvasRenderingContext2D, params: ProjectionParams
   ctx.restore();
 }
 
+const BLANK_ZONE_NEAR_Z = -0.4;
+const BLANK_ZONE_FAR_Z = 8;
+
+/**
+ * The Blank's two attacks read as deliberately different kinds of warning: the beam
+ * targets the road/economy, not a lane position, so it flashes the *whole* lane in
+ * bone (an "erasure," not a "danger zone") with nowhere to dodge to; the cone is a
+ * single vermilion danger band at a fixed position, the same "pick a spot and hold it"
+ * shape as the Smear's arm and the Press's gap.
+ */
+function drawBlankVisual(ctx: CanvasRenderingContext2D, params: ProjectionParams, seal: SealEncounterState): void {
+  const visual = blankActiveVisual(seal.bossState);
+  if (visual === null) return;
+
+  const alpha = 0.25 + 0.35 * visual.progressFraction;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (visual.attackKind === 'beam') {
+    const quad: Quad = [
+      project(-BALANCE.lane.halfWidth, 0, BLANK_ZONE_NEAR_Z, params),
+      project(BALANCE.lane.halfWidth, 0, BLANK_ZONE_NEAR_Z, params),
+      project(BALANCE.lane.halfWidth, 0, BLANK_ZONE_FAR_Z, params),
+      project(-BALANCE.lane.halfWidth, 0, BLANK_ZONE_FAR_Z, params),
+    ];
+    fillQuad(ctx, quad, PALETTE.bone);
+  } else {
+    const quad: Quad = [
+      project(visual.coneCenterX - visual.coneHalfWidthU, 0, BLANK_ZONE_NEAR_Z, params),
+      project(visual.coneCenterX + visual.coneHalfWidthU, 0, BLANK_ZONE_NEAR_Z, params),
+      project(visual.coneCenterX + visual.coneHalfWidthU, 0, BLANK_ZONE_FAR_Z, params),
+      project(visual.coneCenterX - visual.coneHalfWidthU, 0, BLANK_ZONE_FAR_Z, params),
+    ];
+    fillQuad(ctx, quad, PALETTE.vermilion);
+  }
+  ctx.restore();
+}
+
+/** GAME_DESIGN.md §8.2: "Phase 4 erases the road markings entirely, leaving only the
+ *  ink trail to navigate by." main.ts feeds this straight into road.ts's `drawRoad`. */
+export function isRoadMarkingsErased(seal: SealEncounterState | null): boolean {
+  return (
+    seal !== null &&
+    seal.status === 'fighting' &&
+    seal.definitionId === 'blank' &&
+    seal.phaseIndex === BALANCE.seals.blank.phases - 1
+  );
+}
+
 function drawBossAttackVisual(
   ctx: CanvasRenderingContext2D,
   params: ProjectionParams,
@@ -213,6 +262,8 @@ function drawBossAttackVisual(
     drawSmearVisual(ctx, params, seal);
   } else if (seal.definitionId === 'press') {
     drawPressVisual(ctx, params, seal);
+  } else if (seal.definitionId === 'blank') {
+    drawBlankVisual(ctx, params, seal);
   }
 }
 

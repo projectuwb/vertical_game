@@ -28,6 +28,7 @@ import { computeGoldLeaf, createWorld, startSealEncounter, stepWorld, type World
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
 import { SMEAR_SEAL_DEFINITION } from './sim/seals/smear.js';
 import { PRESS_SEAL_DEFINITION } from './sim/seals/press.js';
+import { BLANK_SEAL_DEFINITION } from './sim/seals/blank.js';
 import { RngRegistry } from './core/rng.js';
 import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
@@ -36,7 +37,7 @@ import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater, resetRoadTrailBas
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
-import { drawSeal } from './render/seal.js';
+import { drawSeal, isRoadMarkingsErased } from './render/seal.js';
 import { drawInkBleed, drawInkTrail } from './render/trail.js';
 import { drawDeathSummary, inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
@@ -177,7 +178,7 @@ function bootstrap(): void {
         layers.markRoadTrailClean();
       }
 
-      drawRoad(layers.roadTrailCtx, params, world.distanceU);
+      drawRoad(layers.roadTrailCtx, params, world.distanceU, isRoadMarkingsErased(world.seal));
       drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
 
       const deathElapsedS = deathAtRealMs === null ? 0 : (nowMs() - deathAtRealMs) / 1000;
@@ -310,6 +311,10 @@ function bootstrap(): void {
       if (e.code === 'KeyN') {
         // Task 3.3's debug hook: starts The Press at sealIndex 0.
         startSealEncounter(world, 0, PRESS_SEAL_DEFINITION);
+      }
+      if (e.code === 'KeyV') {
+        // Task 3.4's debug hook: starts The Blank at sealIndex 0.
+        startSealEncounter(world, 0, BLANK_SEAL_DEFINITION);
       }
     });
   }

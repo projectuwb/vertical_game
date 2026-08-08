@@ -60,6 +60,13 @@ export interface SealBossStepResult<TBossState> {
   readonly bossState: TBossState;
   /** Strokes the Line loses this step from a resolved attack — 0 most steps. */
   readonly strokesLost: number;
+  /** The Blank's erasure beam only (GAME_DESIGN.md §8.2's "removes Slips and Gates from
+   *  the road for 3s") — seconds from now to suppress Slip/Gate growth, or undefined
+   *  every other step and for every other boss. world.ts owns the Slip pool and current
+   *  Gate pair, so it's the one that actually clears them; a boss only ever requests it
+   *  through this return value, the same "instruction, not a direct mutation" shape
+   *  `strokesLost` already uses for the Line. */
+  readonly growthEraseS?: number;
 }
 
 /** What a boss (Tasks 3.2-3.4, or seals/stub.ts for this task) plugs into the framework.
@@ -102,7 +109,7 @@ export function stepSealEncounter<TBossState>(
   seal: SealEncounterState,
   definition: SealDefinition<TBossState>,
   ctx: SealStepContext,
-): { seal: SealEncounterState; strokesLost: number } {
+): { seal: SealEncounterState; strokesLost: number; growthEraseS?: number } {
   if (seal.status === 'broken') return { seal, strokesLost: 0 };
 
   if (seal.status === 'approaching') {
@@ -125,7 +132,11 @@ export function stepSealEncounter<TBossState>(
   }
 
   const result = definition.stepBoss(seal.bossState as TBossState, seal.phaseIndex, ctx);
-  return { seal: { ...seal, bossState: result.bossState }, strokesLost: result.strokesLost };
+  return {
+    seal: { ...seal, bossState: result.bossState },
+    strokesLost: result.strokesLost,
+    ...(result.growthEraseS !== undefined ? { growthEraseS: result.growthEraseS } : {}),
+  };
 }
 
 /**
