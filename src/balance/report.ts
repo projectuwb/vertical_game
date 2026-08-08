@@ -5,7 +5,7 @@
 import { BALANCE } from '../sim/config.js';
 import type { BotStrategy } from './bot.js';
 
-export type ReportedDeathCause = 'blot' | 'gate' | 'sealstack' | 'timeout';
+export type ReportedDeathCause = 'blot' | 'gate' | 'sealstack' | 'seal' | 'timeout';
 
 export interface RunResult {
   readonly strategy: BotStrategy;
@@ -19,6 +19,12 @@ export interface RunResult {
   /** Measured by the harness's own loop (world.ts doesn't track this) — did death land
    *  within 8s of the most recent Gate resolution? Null if no Gate was ever resolved. */
   readonly diedWithin8sOfGate: boolean | null;
+  /** Did this run ever start a Seal encounter (approach or fight), whether or not it
+   *  ultimately broke one? Task 3.5's arcade cadence (every `arcadeCadenceS`, GAME_DESIGN.md
+   *  §8.2) is what makes this ever true in harness runs — no bot strategy triggers one
+   *  any other way. */
+  readonly sealReached: boolean;
+  readonly sealBroken: boolean;
 }
 
 export interface ReportMeta {
@@ -76,7 +82,7 @@ function asciiHistogram(values: readonly number[], bucketCount: number, unit: st
 }
 
 function deathCauseBreakdown(results: readonly RunResult[]): string[] {
-  const counts: Record<ReportedDeathCause, number> = { blot: 0, gate: 0, sealstack: 0, timeout: 0 };
+  const counts: Record<ReportedDeathCause, number> = { blot: 0, gate: 0, sealstack: 0, seal: 0, timeout: 0 };
   for (const r of results) counts[r.deathCause]++;
   const total = results.length || 1;
   return (Object.keys(counts) as ReportedDeathCause[]).map(
@@ -91,13 +97,16 @@ interface TargetRow {
 }
 
 /** Compares against GAME_DESIGN.md §11 (mirrored as BALANCE.balanceTargets). Several
- *  targets depend on systems that don't exist yet in this Phase-2 build — Seals (Task
- *  3.x), the Inkstone/upgrades (Task 4.2), and per-Blot-class death attribution (no
- *  target requires it before Task 4.6, which is where the harness gets extended to
- *  chase every §11 row) — those report N/A rather than a fabricated pass or fail. See
- *  DECISIONS.md for why this list of gaps is where the line is drawn for Task 2.7.
+ *  targets depend on systems that don't exist yet in this Phase-2 build — the
+ *  Inkstone/upgrades (Task 4.2), and per-Blot-class death attribution (no target
+ *  requires it before Task 4.6, which is where the harness gets extended to chase every
+ *  §11 row) — those report N/A rather than a fabricated pass or fail. Seal-related
+ *  targets (Task 3.5) are real as of the arcade cadence landing — no bot strategy
+ *  fights intelligently, so "broken" in particular should be read as a floor, not a
+ *  measure of real player skill. See DECISIONS.md for why this list of gaps is where
+ *  the line is drawn for Task 2.7 (and what changed for Task 3.5).
  */
-function evaluateTargets(strategyResults: Map<BotStrategy, RunResult[]>): TargetRow[] {
+function evaluateTargets(results: readonly RunResult[], strategyResults: Map<BotStrategy, RunResult[]>): TargetRow[] {
   const t = BALANCE.balanceTargets;
   const rows: TargetRow[] = [];
 
@@ -150,13 +159,29 @@ function evaluateTargets(strategyResults: Map<BotStrategy, RunResult[]>): Target
     rows.push({ name: 'Strategy dominance', status: 'N/A', detail: 'needs 2+ strategies in one batch (run without --strategy)' });
   }
 
+  const sealReachedFraction = results.length === 0 ? NaN : results.filter((r) => r.sealReached).length / results.length;
+  rows.push({
+    name: 'First Seal reached, zero upgrades',
+    status: sealReachedFraction >= t.firstSealReachedZeroUpgradesMinFraction ? 'PASS' : 'FAIL',
+    detail: `${formatNum(sealReachedFraction * 100, 1)}% vs target ≥${formatNum(t.firstSealReachedZeroUpgradesMinFraction * 100, 0)}%`,
+  });
+
+  const sealBrokenFraction = results.length === 0 ? NaN : results.filter((r) => r.sealBroken).length / results.length;
+  rows.push({
+    name: 'First Seal broken, zero upgrades',
+    status:
+      sealBrokenFraction >= t.firstSealBrokenZeroUpgradesFraction.min &&
+      sealBrokenFraction <= t.firstSealBrokenZeroUpgradesFraction.max
+        ? 'PASS'
+        : 'FAIL',
+    detail: `${formatNum(sealBrokenFraction * 100, 1)}% vs target ${formatNum(t.firstSealBrokenZeroUpgradesFraction.min * 100, 0)}-${formatNum(t.firstSealBrokenZeroUpgradesFraction.max * 100, 0)}% (no bot strategy fights a Seal intelligently yet, so this is a floor)`,
+  });
+
   rows.push(
     { name: 'Median Passage length, all upgrades level 5', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
     { name: 'Median peak Line, upgrades level 5', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
     { name: 'Runs to afford first upgrade', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
     { name: 'Runs to Inkstone level 40', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
-    { name: 'First Seal reached, zero upgrades', status: 'N/A', detail: 'the Director never triggers a Seal encounter yet (Task 3.5); the framework and a stub boss exist (Task 3.1) but nothing starts one automatically' },
-    { name: 'First Seal broken, zero upgrades', status: 'N/A', detail: 'same as above — no bot strategy ever fights a Seal yet' },
     { name: 'Deaths from Crust', status: 'N/A', detail: 'per-Blot-class death attribution is not tracked yet' },
   );
 
@@ -231,7 +256,7 @@ export function generateReport(results: readonly RunResult[], meta: ReportMeta):
   lines.push('');
   lines.push('| Target | Status | Detail |');
   lines.push('|---|---|---|');
-  for (const row of evaluateTargets(strategyResults)) {
+  for (const row of evaluateTargets(results, strategyResults)) {
     lines.push(`| ${row.name} | ${row.status} | ${row.detail} |`);
   }
   lines.push('');

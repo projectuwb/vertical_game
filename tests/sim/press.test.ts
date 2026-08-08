@@ -187,6 +187,10 @@ describe('The Press: full integration through World', () => {
   it('the fight always terminates — it never gets stuck mid-encounter while dodging', () => {
     const world = createWorld(1);
     startSealEncounter(world, 0, PRESS_SEAL_DEFINITION);
+    // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+    // different-boss encounter partway through this long loop (real Passage
+    // behaviour, but not what this Press-specific test means to measure).
+    world.nextSealAtTimeS = Infinity;
     skipApproach(world);
     expect(world.seal?.status).toBe('fighting');
 
@@ -222,6 +226,10 @@ describe('The Press: zero-upgrades baseline win rate (measurement, not a pass/fa
     for (let seed = 1; seed <= SEED_COUNT; seed++) {
       const world = createWorld(seed);
       startSealEncounter(world, 0, PRESS_SEAL_DEFINITION);
+      // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+      // different-boss encounter partway through this multi-attempt loop (real
+      // Passage behaviour, but not what this Press-specific test means to measure).
+      world.nextSealAtTimeS = Infinity;
       skipApproach(world);
 
       for (let i = 0; i < MAX_STEPS && world.seal !== null && !world.isDead; i++) {

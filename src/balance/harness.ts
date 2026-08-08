@@ -92,6 +92,11 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number)
     distanceU: world.distanceU,
     blotKilled: world.blotKilled,
     diedWithin8sOfGate,
+    // world.seal freezes non-null the instant `isDead` does (stepWorld's top-level
+    // early-return), so "currently mid-fight/approach at run end" is still caught here
+    // even for a run that died before ever breaking one.
+    sealReached: world.sealsBroken > 0 || world.seal !== null,
+    sealBroken: world.sealsBroken > 0,
   };
 }
 

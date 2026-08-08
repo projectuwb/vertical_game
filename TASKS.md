@@ -35,7 +35,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 - [x] **3.2 The Smear.** Three phases per §8.2. *Done when: the bot beats it at ~40% with level-5 upgrades and every attack has a positional answer.*
 - [x] **3.3 The Press.** Three phases, rhythmic slams, ring gaps. *Done when: ring gaps are always reachable from any starting lateral position — assert this in a test over 5,000 seeds.*
 - [x] **3.4 The Blank.** Four phases, road erasure, Stroke conversion. *Done when: erasure never leaves the player with zero navigable information — the trail must remain.*
-- [ ] **3.5 Seal scaling.** Index-based HP curve, cycling order, 75s cadence in arcade. *Done when: the harness shows Seal encounters at the expected rate and difficulty ramps smoothly.*
+- [x] **3.5 Seal scaling.** Index-based HP curve, cycling order, 75s cadence in arcade. *Done when: the harness shows Seal encounters at the expected rate and difficulty ramps smoothly.*
 
 ## Phase 4 — Meta and shell
 

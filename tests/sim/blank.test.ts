@@ -113,6 +113,10 @@ describe('The Blank: full integration through World', () => {
   it("the erasure beam clears the Slip pool and current Gate pair, and suppresses new Slip runs for eraseDurationS", () => {
     const world = createWorld(1);
     startSealEncounter(world, 0, BLANK_SEAL_DEFINITION);
+    // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+    // different-boss encounter later in this test (real Passage behaviour, but not
+    // what this Blank-specific test means to measure).
+    world.nextSealAtTimeS = Infinity;
     skipApproach(world);
 
     spawnSlip(world.slipPool, 'plusOne', 'hane', 3, 10);

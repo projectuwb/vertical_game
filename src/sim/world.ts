@@ -106,6 +106,9 @@ import {
   type SealDefinition,
   type SealEncounterState,
 } from './seals/framework.js';
+import { SMEAR_SEAL_DEFINITION } from './seals/smear.js';
+import { PRESS_SEAL_DEFINITION } from './seals/press.js';
+import { BLANK_SEAL_DEFINITION } from './seals/blank.js';
 import type { Pool } from '../core/pool.js';
 
 /** The Brush's fixed world-space depth — the world scrolls past it, not the other way
@@ -146,6 +149,7 @@ export interface World {
   nextGateAtDistanceU: number;
   nextSealstackAtDistanceU: number;
   nextInkPoolAtDistanceU: number;
+  nextSealAtTimeS: number;
 
   mercy: MercyState;
   currentGatePair: GatePair | null;
@@ -212,6 +216,7 @@ export function createWorld(seed: number): World {
     nextGateAtDistanceU: jitteredInterval(rng, BALANCE.gates.pairIntervalU),
     nextSealstackAtDistanceU: jitteredInterval(rng, BALANCE.director.sealstackIntervalU),
     nextInkPoolAtDistanceU: jitteredInterval(rng, BALANCE.wetness.poolSpacingU),
+    nextSealAtTimeS: BALANCE.seals.arcadeCadenceS,
 
     mercy: createMercyState(),
     currentGatePair: null,
@@ -240,13 +245,50 @@ function jitteredInterval(rng: RngRegistry, base: number): number {
   return base + rng.range('director', -delta, delta);
 }
 
-/** Starts a Seal encounter — its own approach, phases, and HP, per `definition`. Task
- *  3.1 exposes this as a direct hook (main.ts's debug keys, tests) rather than wiring
- *  automatic Director cadence, which is Task 3.5's job. Overwrites any encounter already
- *  in progress; callers are responsible for not doing that mid-fight. */
+/** Starts a Seal encounter — its own approach, phases, and HP, per `definition`.
+ *  Overwrites any encounter already in progress; callers are responsible for not doing
+ *  that mid-fight. Exported directly for main.ts's debug keys and tests; the real
+ *  Director-driven arcade cadence (`maybeStartSealEncounter` below) also calls through
+ *  it rather than duplicating the assignment. */
 export function startSealEncounter(world: World, sealIndex: number, definition: SealDefinition): void {
   world.seal = createSealEncounter(sealIndex, definition);
   world.sealDefinition = definition;
+}
+
+/** `BALANCE.seals.order`'s string names, resolved to their actual `SealDefinition`s and
+ *  laid out as a fixed-length tuple in the same sequence — the one place the cycling
+ *  order and the concrete boss modules meet. A tuple (not a plain array) so indexing it
+ *  with a literal, like the `[0]` fallback below, is fully typed with no non-null
+ *  assertion (TECH_SPEC.md §13 restricts those to pool internals). */
+const SEAL_DEFINITIONS_BY_NAME: Record<(typeof BALANCE.seals.order)[number], SealDefinition> = {
+  smear: SMEAR_SEAL_DEFINITION,
+  press: PRESS_SEAL_DEFINITION,
+  blank: BLANK_SEAL_DEFINITION,
+};
+const SEAL_CYCLE: readonly [SealDefinition, SealDefinition, SealDefinition] = [
+  SEAL_DEFINITIONS_BY_NAME[BALANCE.seals.order[0]],
+  SEAL_DEFINITIONS_BY_NAME[BALANCE.seals.order[1]],
+  SEAL_DEFINITIONS_BY_NAME[BALANCE.seals.order[2]],
+];
+
+/**
+ * GAME_DESIGN.md §8.2: a Seal appears "in the arcade loop every 75s of Passage time,"
+ * cycling through `BALANCE.seals.order` with an increasing index (§8.2's HP formula is
+ * itself `sealIndex`-driven). `world.sealsBroken` already counts exactly that — how
+ * many Seals this Passage has broken — so it doubles as both "which name is next in the
+ * cycle" and "how strong the next one is," with no separate counter needed. Checked
+ * only while `world.seal === null` (an encounter can't overlap another) and only once
+ * per threshold crossing, same "just re-checks next time" shape every other Director
+ * cadence in this file already uses — a fight that runs long doesn't make the next one
+ * fire in a burst, it simply starts the moment this check next sees the time has passed.
+ */
+function maybeStartSealEncounter(world: World): void {
+  if (world.seal !== null) return;
+  if (world.timeS < world.nextSealAtTimeS) return;
+
+  const definition = SEAL_CYCLE[world.sealsBroken % SEAL_CYCLE.length] ?? SEAL_CYCLE[0];
+  startSealEncounter(world, world.sealsBroken, definition);
+  world.nextSealAtTimeS = world.timeS + BALANCE.seals.arcadeCadenceS;
 }
 
 /** World-space z the Seal currently sits at: closing smoothly from the normal
@@ -421,6 +463,8 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   world.mercy = updateMercyState(world.mercy, world.timeS, world.line.strokes.length);
   const mercyActive = isMercyActive(world.mercy, world.timeS);
   const pressure = computePressure(world.timeS, world.line.strokes.length);
+
+  maybeStartSealEncounter(world);
 
   // GAME_DESIGN.md §8.2: "Seals do not block Slips — Slip runs continue during the
   // fight." Everything else the Director throws (Blot waves, Gates, Sealstacks) pauses

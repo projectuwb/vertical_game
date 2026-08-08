@@ -138,6 +138,10 @@ describe('The Smear: full integration through World', () => {
   it('the fight cycles through all 3 phases and ends broken while dodging', () => {
     const world = createWorld(1);
     startSealEncounter(world, 0, SMEAR_SEAL_DEFINITION);
+    // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+    // different-boss encounter partway through these long/multi-attempt loops (real
+    // Passage behaviour, but not what this Smear-specific test means to measure).
+    world.nextSealAtTimeS = Infinity;
     skipApproach(world);
     expect(world.seal?.status).toBe('fighting');
 
@@ -164,6 +168,10 @@ describe('The Smear: full integration through World', () => {
   it('dodging to the edge avoids all Stroke loss for the whole fight', () => {
     const world = createWorld(1);
     startSealEncounter(world, 0, SMEAR_SEAL_DEFINITION);
+    // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+    // different-boss encounter partway through these long/multi-attempt loops (real
+    // Passage behaviour, but not what this Smear-specific test means to measure).
+    world.nextSealAtTimeS = Infinity;
     skipApproach(world);
 
     const startCount = world.line.strokes.length;
@@ -195,6 +203,10 @@ describe('The Smear: zero-upgrades baseline win rate (measurement, not a pass/fa
     for (let seed = 1; seed <= SEED_COUNT; seed++) {
       const world = createWorld(seed);
       startSealEncounter(world, 0, SMEAR_SEAL_DEFINITION);
+      // Task 3.5's arcade cadence would otherwise be free to auto-start a second,
+      // different-boss encounter partway through these long/multi-attempt loops (real
+      // Passage behaviour, but not what this Smear-specific test means to measure).
+      world.nextSealAtTimeS = Infinity;
       skipApproach(world);
 
       for (let i = 0; i < MAX_STEPS && world.seal !== null && !world.isDead; i++) {
