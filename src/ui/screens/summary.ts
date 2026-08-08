@@ -41,7 +41,7 @@ export interface SummaryScreen {
 
 const GOLD_COUNT_S = 0.6;
 
-export function createSummaryScreen(callbacks: { onContinue: () => void }): SummaryScreen {
+export function createSummaryScreen(callbacks: { onContinue: () => void; onWatchReplay: () => void }): SummaryScreen {
   const { root, content } = createScreenOverlay();
   root.style.background = `${PALETTE.deep}EB`; // translucent — the frozen, bleeding canvas stays visible behind
   content.style.justifyContent = 'center';
@@ -72,6 +72,9 @@ export function createSummaryScreen(callbacks: { onContinue: () => void }): Summ
       });
   });
   copyResultButton.style.display = 'none';
+  // Task 7.2: always available once a real Passage has ended — the seed + input tape
+  // that just produced this summary is always what "Watch replay" plays back.
+  const watchReplayButton = createLinkButton(STRINGS.summary.watchReplay, callbacks.onWatchReplay);
   const continueButton = createButton(STRINGS.summary.continue, callbacks.onContinue, { primary: true });
 
   content.append(
@@ -84,6 +87,7 @@ export function createSummaryScreen(callbacks: { onContinue: () => void }): Summ
     sealsRow.element,
     bestLine,
     copyResultButton,
+    watchReplayButton,
     continueButton,
   );
 

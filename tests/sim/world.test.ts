@@ -34,6 +34,52 @@ describe('createWorld', () => {
     expect(a.blotPool.activeCount).toBe(b.blotPool.activeCount);
     expect(a.isDead).toBe(b.isDead);
   });
+
+  // Task 7.2 ("replay from seed + input tape, playable back in-engine") rests entirely
+  // on this holding for real, *varying* input, not just the trivial NO_INPUT case above
+  // — a recorded Passage moves the Brush around and holds for Flourishes throughout.
+  it('replaying a recorded varying input tape against a fresh same-seed World reproduces the run bit-for-bit', () => {
+    const seed = 7;
+    const steps = 600;
+
+    // A real Passage's own recording loop: sample-shaped input, appended step by step —
+    // scripted here (a deterministic pseudo-pattern, not real touch input) purely to get
+    // a tape that isn't just "always the same input," which the NO_INPUT test above
+    // already can't distinguish from a broken replay that ignores its input entirely.
+    const tape: WorldInput[] = [];
+    const original = createWorld(seed);
+    for (let i = 0; i < steps; i++) {
+      const input: WorldInput = {
+        lateralDelta: Math.sin(i * 0.13) * BALANCE.control.keyboardUPerS * DT,
+        holding: i % 47 < 12, // holds for a stretch, releases, repeats — exercises Flourish charge/release too
+      };
+      tape.push(input);
+      stepWorld(original, DT, input);
+    }
+
+    const replay = createWorld(seed);
+    for (const input of tape) {
+      stepWorld(replay, DT, input);
+    }
+
+    expect(replay.timeS).toBe(original.timeS);
+    expect(replay.distanceU).toBe(original.distanceU);
+    expect(replay.brushFollower.position).toBe(original.brushFollower.position);
+    expect(replay.line.strokes).toEqual(original.line.strokes);
+    expect(replay.blotPool.activeCount).toBe(original.blotPool.activeCount);
+    expect(replay.wetness.current).toBe(original.wetness.current);
+    expect(replay.isDead).toBe(original.isDead);
+    expect(replay.deathCause).toBe(original.deathCause);
+
+    // Sanity check the test itself isn't vacuous: a *different* tape against the same
+    // seed must actually diverge, or the assertions above would pass even if stepWorld
+    // silently ignored its input parameter entirely.
+    const divergent = createWorld(seed);
+    for (let i = 0; i < steps; i++) {
+      stepWorld(divergent, DT, NO_INPUT);
+    }
+    expect(divergent.brushFollower.position).not.toBe(original.brushFollower.position);
+  });
 });
 
 describe('stepWorld', () => {

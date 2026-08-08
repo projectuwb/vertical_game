@@ -29,7 +29,7 @@ import { BLOT_CLASSES, spawnBlot, type Blot } from './sim/blot.js';
 import { pickSlipClass, spawnSlip, type Slip, type SlipKind } from './sim/slips.js';
 import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
-import { createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
+import { createWorld, startSealEncounter, stepWorld, type World, type WorldInput } from './sim/world.js';
 import { computePressure } from './sim/director.js';
 import { computeGoldLeaf } from './meta/economy.js';
 import { computeDailySeed, dailyDayNumber } from './meta/dailySeed.js';
@@ -173,6 +173,20 @@ function bootstrap(): void {
   let world: World = createWorld(Date.now(), profile.upgradeLevels);
   const debugRng = new RngRegistry(Date.now());
 
+  // Task 7.2: "replay from seed + input tape, playable back in-engine." Recording is
+  // just the exact `WorldInput` `stepWorld` already consumes each fixed step, appended
+  // as it happens — the loop is already deterministic (fixed timestep, seeded RNG per
+  // concern, TECH_SPEC.md §4), so seed + this tape is sufficient to reproduce a Passage
+  // bit-for-bit. Kept in memory only for the Passage that just ended, not persisted
+  // across reloads — "watch the run you just had" is the whole feature this task asks
+  // for, not a saved replay library (that's closer to Task 7.3's Statistics-screen
+  // territory, unscoped here).
+  let recordedInputs: WorldInput[] = [];
+  let currentRunFirstRunTeaching = false;
+  let lastReplay: { readonly seed: number; readonly firstRunTeaching: boolean; readonly inputs: readonly WorldInput[] } | null = null;
+  let replayInputs: readonly WorldInput[] = [];
+  let replayStepIndex = 0;
+
   // Audio (Task 4.4): the mixer/AudioContext is created immediately (it may start
   // `suspended` — that's fine, nothing plays until it's resumed) so `setMuted` can be
   // applied from the loaded Profile right away; actually producing sound needs a real
@@ -232,7 +246,9 @@ function bootstrap(): void {
     // overrides the seed's own early layout (Slip→Gate→wave, GAME_DESIGN.md §13), which
     // would make a first-ever player's "same day, same seed" result incomparable with
     // everyone else's — the daily's whole point.
-    world = createWorld(seed, profile.upgradeLevels, !isDailyPassage && profile.totalPassages === 0);
+    currentRunFirstRunTeaching = !isDailyPassage && profile.totalPassages === 0;
+    world = createWorld(seed, profile.upgradeLevels, currentRunFirstRunTeaching);
+    recordedInputs = []; // Task 7.2: a fresh tape for this Passage
     // This Passage's own fresh event bus — the old one (and its listeners) is now unreachable.
     attachSfx(world.events);
     attachFlourishHaptics(world.events);
@@ -259,6 +275,11 @@ function bootstrap(): void {
   function handlePassageDeath(): void {
     wakeLock.release();
     deathAtRealMs = nowMs();
+    // Task 7.2: snapshot the tape *before* anything else touches `recordedInputs` —
+    // `beginPassage` (a later "Watch replay"/"Play again"/daily attempt) always starts a
+    // fresh array rather than mutating this one in place, so holding this reference is
+    // enough; no copy needed.
+    lastReplay = { seed: lastSeed ?? 0, firstRunTeaching: currentRunFirstRunTeaching, inputs: recordedInputs };
     const previousBestDistanceU = profile.bestDistanceU;
     const goldLeaf = computeGoldLeaf(
       world.blotKilled,
@@ -289,6 +310,33 @@ function bootstrap(): void {
     setAppState('summary');
   }
 
+  // Task 7.2: reconstructs the just-ended Passage from its seed + recorded input tape —
+  // same `createWorld`/event-wiring shape as `beginPassage`, since a replay is a real
+  // Passage in every way the engine can tell, just fed a tape instead of live input.
+  function startReplay(): void {
+    if (lastReplay === null) return;
+    world = createWorld(lastReplay.seed, profile.upgradeLevels, lastReplay.firstRunTeaching);
+    attachSfx(world.events);
+    attachFlourishHaptics(world.events);
+    attachFlourishShake(world.events, () => {
+      shakeState = triggerShake(world.timeS);
+    });
+    replayInputs = lastReplay.inputs;
+    replayStepIndex = 0;
+    deathAtRealMs = null;
+    layers.requestRoadTrailReset();
+    setAppState('replaying');
+    wakeLock.acquire();
+  }
+
+  // A replay never calls `handlePassageDeath` — it already happened for real the first
+  // time this seed+tape played out, and re-running it (recordRunResult, saveProfile,
+  // Gold Leaf) would double-count a Passage that only actually occurred once.
+  function endReplay(): void {
+    wakeLock.release();
+    setAppState('title');
+  }
+
   const titleScreen = createTitleScreen({
     onBegin: () => beginPassage(),
     onBeginDaily: () => beginPassage(computeDailySeed()),
@@ -305,6 +353,7 @@ function bootstrap(): void {
       refreshInkstoneScreen();
       setAppState('inkstone');
     },
+    onWatchReplay: startReplay,
   });
   const inkstoneScreen = createInkstoneScreen({
     onPlay: () => beginPassage(),
@@ -337,30 +386,49 @@ function bootstrap(): void {
   titleScreen.update(profile);
   setAppState('title');
 
+  // Shared by real play and replay playback — a replay is a real Passage in every way
+  // the engine can tell, just fed a recorded `WorldInput` instead of a live sampled one.
+  // TECH_SPEC.md §11: haptics on Line loss and Seal impact — no dedicated /sim event for
+  // either (Task 4.4 deliberately scoped GameEvents to §12's audio-only list), so this
+  // diffs the Line's own Stroke count the same way every other per-step main.ts concern
+  // already reads World directly.
+  function stepAndReact(dtFixed: number, frameInput: WorldInput): void {
+    const strokesBefore = world.line.strokes.length;
+    const sealActiveBefore = world.seal !== null;
+    stepWorld(world, dtFixed, frameInput);
+    const strokesLostThisStep = strokesBefore - world.line.strokes.length;
+    fireLineLossHaptic(strokesLostThisStep, sealActiveBefore);
+    if (strokesLostThisStep > 0 && sealActiveBefore) {
+      shakeState = triggerShake(world.timeS);
+    }
+    // GAME_DESIGN.md §12: tempo tied to Pressure, dropping to a single drone while a
+    // Seal is near (approaching or fighting — "near" covers both, not just the fight
+    // itself, since the drone should already be settling in during the approach).
+    music.setPressure(computePressure(world.timeS, world.line.strokes.length));
+    music.setSealNear(world.seal !== null);
+  }
+
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
-      if (appState !== 'playing') return;
-      const frame = input.sample(dtFixed);
-      const strokesBefore = world.line.strokes.length;
-      const sealActiveBefore = world.seal !== null;
-      stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
-      // TECH_SPEC.md §11: haptics on Line loss and Seal impact — no dedicated /sim event
-      // for either (Task 4.4 deliberately scoped GameEvents to §12's audio-only list),
-      // so this diffs the Line's own Stroke count the same way every other per-step
-      // main.ts concern (e.g. the death check right below) already reads World directly.
-      const strokesLostThisStep = strokesBefore - world.line.strokes.length;
-      fireLineLossHaptic(strokesLostThisStep, sealActiveBefore);
-      if (strokesLostThisStep > 0 && sealActiveBefore) {
-        shakeState = triggerShake(world.timeS);
+      if (appState === 'playing') {
+        const frame = input.sample(dtFixed);
+        const frameInput: WorldInput = { lateralDelta: frame.lateralDelta, holding: frame.holding };
+        recordedInputs.push(frameInput); // Task 7.2: growing the current Passage's tape
+        stepAndReact(dtFixed, frameInput);
+        if (world.isDead && deathAtRealMs === null) {
+          handlePassageDeath();
+        }
+        return;
       }
-      if (world.isDead && deathAtRealMs === null) {
-        handlePassageDeath();
+      if (appState === 'replaying') {
+        const frameInput: WorldInput = replayStepIndex < replayInputs.length ? (replayInputs[replayStepIndex] as WorldInput) : { lateralDelta: 0, holding: false };
+        replayStepIndex++;
+        stepAndReact(dtFixed, frameInput);
+        if (world.isDead || replayStepIndex >= replayInputs.length) {
+          endReplay();
+        }
+        return;
       }
-      // GAME_DESIGN.md §12: tempo tied to Pressure, dropping to a single drone while a
-      // Seal is near (approaching or fighting — "near" covers both, not just the fight
-      // itself, since the drone should already be settling in during the approach).
-      music.setPressure(computePressure(world.timeS, world.line.strokes.length));
-      music.setSealNear(world.seal !== null);
     },
     render: (_alpha: number): void => {
       const nowRenderMs = nowMs();
@@ -381,11 +449,11 @@ function bootstrap(): void {
         lastDpr = metrics.devicePixelRatio;
       }
 
-      // The game canvas only matters while actually playing, or frozen behind the
-      // translucent summary screen right after death — Title/Inkstone/Settings are
-      // fully opaque DOM overlays, so there's nothing to gain by keeping the canvas
-      // scene current underneath them.
-      if (appState !== 'playing' && appState !== 'summary') return;
+      // The game canvas only matters while actually playing, replaying (Task 7.2), or
+      // frozen behind the translucent summary screen right after death —
+      // Title/Inkstone/Settings are fully opaque DOM overlays, so there's nothing to
+      // gain by keeping the canvas scene current underneath them.
+      if (appState !== 'playing' && appState !== 'replaying' && appState !== 'summary') return;
 
       const params = computeProjectionParams(metrics.cssWidth, metrics.cssHeight);
       const brushX = clamp(world.brushFollower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
@@ -442,7 +510,7 @@ function bootstrap(): void {
   // return covers the common "switched app, came back mid-Passage" case that
   // `attachVisibilityAutoPause` above already resumes the loop for.
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && appState === 'playing') wakeLock.acquire();
+    if (!document.hidden && (appState === 'playing' || appState === 'replaying')) wakeLock.acquire();
   });
 
   // TECH_SPEC.md §11: "hardware back button mapped to pause/back-out (never straight to
@@ -459,6 +527,11 @@ function bootstrap(): void {
       setAppState('title');
     } else if (appState === 'playing') {
       App.minimizeApp();
+    } else if (appState === 'replaying') {
+      // Task 7.2: a replay isn't a Passage actually in progress (its result is already
+      // recorded) — back stops watching and returns to Title, same as everywhere else
+      // that isn't a real mid-Passage "pause" worth preserving.
+      endReplay();
     } else {
       App.exitApp();
     }

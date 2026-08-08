@@ -28,6 +28,7 @@ export const STRINGS = {
     continue: 'Continue to the Inkstone',
     copyResult: 'Copy result',
     copied: 'Copied',
+    watchReplay: 'Watch replay',
   },
   deathCause: {
     blot: 'Overrun',
