@@ -105,7 +105,10 @@ const ALL_CLASSES: readonly StrokeClass[] = ['hane', 'tome', 'harai'];
  * come due, cycling through that class's front-row source positions for muzzle
  * variety. Mutates `accumulators` and `pool` in place. `damageMultiplier`/
  * `rangeMultiplier` (both default 1) are the Grind/Reach Inkstone tracks (Task 4.2),
- * threaded straight through to `computeFiringPlan`/`spawnProjectile`.
+ * threaded straight through to `computeFiringPlan`/`spawnProjectile`. `splashMultiplier`
+ * (default 1, appended last rather than inserted alongside the others to avoid
+ * reshuffling existing positional callers) is Gates' Temper track's splash stack
+ * (Task 7.8, GAME_DESIGN.md §7.2: "Splash +30%") — a no-op for every class but Tome.
  */
 export function updateFiring(
   accumulators: FiringAccumulators,
@@ -118,6 +121,7 @@ export function updateFiring(
   damageMultiplier = 1,
   rangeMultiplier = 1,
   events?: GameEventBus,
+  splashMultiplier = 1,
 ): void {
   for (const cls of ALL_CLASSES) {
     const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls], rateMultiplier, damageMultiplier);
@@ -134,7 +138,7 @@ export function updateFiring(
       state.timeAccumulator -= 1;
       const source = sources[state.muzzleCursor % sources.length] as FrontRowSource;
       state.muzzleCursor++;
-      spawnProjectile(pool, cls, source.x, source.z, plan.damagePerProjectile, rangeMultiplier);
+      spawnProjectile(pool, cls, source.x, source.z, plan.damagePerProjectile, rangeMultiplier, splashMultiplier);
       events?.emit('fire', { class: cls });
     }
   }
@@ -147,6 +151,7 @@ function spawnProjectile(
   z: number,
   damage: number,
   rangeMultiplier = 1,
+  splashMultiplier = 1,
 ): void {
   const projectile = pool.acquire();
   if (projectile === undefined) return; // pool exhausted — a perf ceiling, not a gameplay bug
@@ -156,7 +161,7 @@ function spawnProjectile(
   projectile.z = z;
   projectile.damage = damage;
   projectile.pierceRemaining = cls === 'harai' ? BALANCE.strokes.harai.pierceCount : 1;
-  projectile.splashRadiusU = cls === 'tome' ? BALANCE.strokes.tome.splashRadiusU : 0;
+  projectile.splashRadiusU = cls === 'tome' ? BALANCE.strokes.tome.splashRadiusU * splashMultiplier : 0;
   projectile.distanceTraveledU = 0;
   projectile.maxRangeU = stats.rangeU * rangeMultiplier;
 }

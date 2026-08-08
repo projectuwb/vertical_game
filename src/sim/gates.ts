@@ -156,6 +156,31 @@ export function createTemperState(): TemperState {
   return { rateStacks: 0, rangeStacks: 0, splashStacks: 0, wetnessCapStacks: 0 };
 }
 
+export interface TemperEffects {
+  /** Composes multiplicatively with `upgradeEffects.fireRateMultiplier`. */
+  readonly rateMultiplier: number;
+  /** Composes multiplicatively with `upgradeEffects.rangeMultiplier`. */
+  readonly rangeMultiplier: number;
+  /** Composes multiplicatively with Tome's base `splashRadiusU` — no Inkstone counterpart. */
+  readonly splashMultiplier: number;
+  /** Composes additively with `upgradeEffects.wetnessCapBonus` and `BALANCE.wetness.max`. */
+  readonly wetnessCapBonus: number;
+}
+
+/** Task 7.8: turns the stack counts `applyGateEffect` accumulates on every Temper Gate
+ *  resolution into the actual multipliers/bonus stepWorld composes alongside
+ *  `upgradeEffects` (Task 4.2) at the same call sites — GAME_DESIGN.md §7.2: "Rate +20%,
+ *  Range +25%, Splash +30%, Wetness cap +25" per stack. */
+export function computeTemperEffects(temper: TemperState): TemperEffects {
+  const t = BALANCE.gates.temper;
+  return {
+    rateMultiplier: 1 + temper.rateStacks * t.rateBonus,
+    rangeMultiplier: 1 + temper.rangeStacks * t.rangeBonus,
+    splashMultiplier: 1 + temper.splashStacks * t.splashBonus,
+    wetnessCapBonus: temper.wetnessCapStacks * t.wetnessCapBonus,
+  };
+}
+
 function applyTemperStat(temper: TemperState, stat: TemperStat): TemperState {
   const cap = BALANCE.gates.temper.stackCap;
   switch (stat) {

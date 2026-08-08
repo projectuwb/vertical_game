@@ -57,6 +57,7 @@ import {
 } from './sealstacks.js';
 import {
   applyGateEffect,
+  computeTemperEffects,
   createTemperState,
   generateGatePair,
   resolveGatePairContact,
@@ -441,10 +442,11 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
 
   const { front, back } = computeRowClassCounts(world.line);
   const sources = computeFrontRowSourcePositions(world.line, brushX, BRUSH_Z);
-  const wetnessCap = BALANCE.wetness.max + world.upgradeEffects.wetnessCapBonus;
+  const temperEffects = computeTemperEffects(world.temper);
+  const wetnessCap = BALANCE.wetness.max + world.upgradeEffects.wetnessCapBonus + temperEffects.wetnessCapBonus;
   if (!input.holding) {
     const dryMultiplier = isWetnessDry(world.wetness) ? BALANCE.wetness.dryFireRateMult : 1;
-    const rateMultiplier = dryMultiplier * world.upgradeEffects.fireRateMultiplier;
+    const rateMultiplier = dryMultiplier * world.upgradeEffects.fireRateMultiplier * temperEffects.rateMultiplier;
     updateFiring(
       world.firingAccumulators,
       world.projectilePool,
@@ -454,8 +456,9 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
       sources,
       rateMultiplier,
       world.upgradeEffects.damageMultiplier,
-      world.upgradeEffects.rangeMultiplier,
+      world.upgradeEffects.rangeMultiplier * temperEffects.rangeMultiplier,
       world.events,
+      temperEffects.splashMultiplier,
     );
   }
   updateProjectileMotion(world.projectilePool, dtFixed);
