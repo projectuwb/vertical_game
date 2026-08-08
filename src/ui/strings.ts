@@ -14,6 +14,7 @@ export const STRINGS = {
     installPrompt: 'Add INKFALL to your home screen for offline play.',
     installAction: 'Install',
     installDismiss: 'Not now',
+    daily: (dayNumber: number): string => `Today's Passage — Day #${dayNumber}`,
   },
   summary: {
     heading: 'Passage ended',
@@ -25,6 +26,8 @@ export const STRINGS = {
     newBest: 'New best',
     previousBest: (u: number): string => `Previous best: ${Math.floor(u)}u`,
     continue: 'Continue to the Inkstone',
+    copyResult: 'Copy result',
+    copied: 'Copied',
   },
   deathCause: {
     blot: 'Overrun',

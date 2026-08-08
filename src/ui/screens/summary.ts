@@ -7,9 +7,10 @@
 // bleeding out" feel from Task 2.11 isn't lost, just no longer carrying the text too.
 
 import type { DeathCause } from '../../sim/world.js';
+import { formatDailyShareText } from '../../meta/dailySeed.js';
 import { PALETTE } from '../../render/palette.js';
 import { STRINGS } from '../strings.js';
-import { createButton, createHeading, createParagraph, createScreenOverlay, createStatRow } from '../widgets.js';
+import { createButton, createHeading, createLinkButton, createParagraph, createScreenOverlay, createStatRow } from '../widgets.js';
 
 export interface SummaryStats {
   readonly distanceU: number;
@@ -23,6 +24,10 @@ export interface SummaryStats {
    *  updated by the time this screen shows (main.ts records the run immediately on
    *  death, not on a delay). */
   readonly previousBestDistanceU: number;
+  /** Task 7.1: set only when this Passage used the daily seed — the "Copy result" row
+   *  only ever shows for a run comparable across players, not an ordinary Passage
+   *  (whose seed nobody else shares, so sharing its result wouldn't mean anything). */
+  readonly dailyDayNumber: number | null;
 }
 
 export interface SummaryScreen {
@@ -50,6 +55,23 @@ export function createSummaryScreen(callbacks: { onContinue: () => void }): Summ
   const blotRow = createStatRow(STRINGS.summary.blotUnbound, '');
   const sealsRow = createStatRow(STRINGS.summary.sealsBroken, '');
   const bestLine = createParagraph('', { muted: true });
+  // Task 7.1: copy-to-clipboard, never a network submission — visible only for a run
+  // that used the daily seed (see `SummaryStats.dailyDayNumber`'s own doc comment).
+  const copyResultButton = createLinkButton(STRINGS.summary.copyResult, () => {
+    if (currentShareText === null) return;
+    navigator.clipboard
+      .writeText(currentShareText)
+      .then(() => {
+        copyResultButton.textContent = STRINGS.summary.copied;
+        window.setTimeout(() => {
+          copyResultButton.textContent = STRINGS.summary.copyResult;
+        }, 1500);
+      })
+      .catch(() => {
+        // Clipboard access denied or unavailable — nothing else to do about it.
+      });
+  });
+  copyResultButton.style.display = 'none';
   const continueButton = createButton(STRINGS.summary.continue, callbacks.onContinue, { primary: true });
 
   content.append(
@@ -61,10 +83,12 @@ export function createSummaryScreen(callbacks: { onContinue: () => void }): Summ
     blotRow.element,
     sealsRow.element,
     bestLine,
+    copyResultButton,
     continueButton,
   );
 
   let animationHandle: number | null = null;
+  let currentShareText: string | null = null;
 
   return {
     root,
@@ -83,6 +107,21 @@ export function createSummaryScreen(callbacks: { onContinue: () => void }): Summ
         : stats.previousBestDistanceU > 0
           ? STRINGS.summary.previousBest(stats.previousBestDistanceU)
           : '';
+
+      if (stats.dailyDayNumber !== null) {
+        currentShareText = formatDailyShareText({
+          dayNumber: stats.dailyDayNumber,
+          distanceU: stats.distanceU,
+          peakLine: stats.peakLine,
+          sealsBroken: stats.sealsBroken,
+          deathCauseText: STRINGS.deathCause[stats.deathCause],
+        });
+        copyResultButton.textContent = STRINGS.summary.copyResult;
+        copyResultButton.style.display = '';
+      } else {
+        currentShareText = null;
+        copyResultButton.style.display = 'none';
+      }
 
       const startMs = performance.now();
       const tick = (nowMs: number): void => {

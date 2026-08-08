@@ -32,6 +32,7 @@ import { spawnSealstack } from './sim/sealstacks.js';
 import { createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
 import { computePressure } from './sim/director.js';
 import { computeGoldLeaf } from './meta/economy.js';
+import { computeDailySeed, dailyDayNumber } from './meta/dailySeed.js';
 import { loadProfile, saveProfile, recordRunResult, type Profile, type ProfileSettings } from './meta/profile.js';
 import { purchaseUpgrade } from './meta/upgrades.js';
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
@@ -164,6 +165,11 @@ function bootstrap(): void {
   // 4.3) exposes the most recent one. Decoupled from world.rng (see spawnDebugSlipRun
   // below) for the debug RNG stream.
   let lastSeed: number | null = null;
+  // Task 7.1: true only for the Passage currently in progress if it was started via the
+  // Daily seed entry point — drives the summary screen's "Copy result" row, which only
+  // makes sense for a run comparable across players (an ordinary Passage's seed is
+  // `Date.now()`, unique to that one attempt).
+  let isDailyPassage = false;
   let world: World = createWorld(Date.now(), profile.upgradeLevels);
   const debugRng = new RngRegistry(Date.now());
 
@@ -212,13 +218,21 @@ function bootstrap(): void {
     setScreenVisible(settingsScreen.root, next === 'settings');
   }
 
-  function beginPassage(): void {
-    const seed = Date.now();
+  // `dailySeed` (Task 7.1) is set only when entering via the title screen's Daily link —
+  // every other caller (the ordinary Begin button, Inkstone's Play, the debug KeyR
+  // restart) keeps the existing Date.now() behaviour unchanged.
+  function beginPassage(dailySeed?: number): void {
+    const seed = dailySeed ?? Date.now();
     lastSeed = seed;
+    isDailyPassage = dailySeed !== undefined;
     // GAME_DESIGN.md §13: the scripted opening only ever applies to a profile's very
     // first-ever Passage — `recordRunResult` (in `handlePassageDeath`) increments
-    // `totalPassages` the instant this one ends, so it can never fire twice.
-    world = createWorld(seed, profile.upgradeLevels, profile.totalPassages === 0);
+    // `totalPassages` the instant this one ends, so it can never fire twice. Explicitly
+    // excluded for a Daily Passage even on a brand-new profile: the scripted opening
+    // overrides the seed's own early layout (Slip→Gate→wave, GAME_DESIGN.md §13), which
+    // would make a first-ever player's "same day, same seed" result incomparable with
+    // everyone else's — the daily's whole point.
+    world = createWorld(seed, profile.upgradeLevels, !isDailyPassage && profile.totalPassages === 0);
     // This Passage's own fresh event bus — the old one (and its listeners) is now unreachable.
     attachSfx(world.events);
     attachFlourishHaptics(world.events);
@@ -270,12 +284,14 @@ function bootstrap(): void {
       goldLeaf,
       deathCause: world.deathCause ?? 'blot',
       previousBestDistanceU,
+      dailyDayNumber: isDailyPassage ? dailyDayNumber() : null,
     });
     setAppState('summary');
   }
 
   const titleScreen = createTitleScreen({
-    onBegin: beginPassage,
+    onBegin: () => beginPassage(),
+    onBeginDaily: () => beginPassage(computeDailySeed()),
     onSettings: () => {
       refreshSettingsScreen();
       setAppState('settings');
@@ -291,7 +307,7 @@ function bootstrap(): void {
     },
   });
   const inkstoneScreen = createInkstoneScreen({
-    onPlay: beginPassage,
+    onPlay: () => beginPassage(),
     onPurchase: (track) => {
       profile = purchaseUpgrade(profile, track) ?? profile;
       saveProfile(storage, profile);

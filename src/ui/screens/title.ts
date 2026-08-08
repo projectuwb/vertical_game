@@ -6,6 +6,7 @@
 // `platform/pwa.ts`'s controller reports the prompt is actually available.
 
 import { PALETTE } from '../../render/palette.js';
+import { dailyDayNumber } from '../../meta/dailySeed.js';
 import type { Profile } from '../../meta/profile.js';
 import { STRINGS } from '../strings.js';
 import { createButton, createHeading, createLinkButton, createParagraph, createScreenOverlay } from '../widgets.js';
@@ -18,6 +19,7 @@ export interface TitleScreen {
 
 export function createTitleScreen(callbacks: {
   onBegin: () => void;
+  onBeginDaily: () => void;
   onSettings: () => void;
   onInstall: () => void;
   onDismissInstall: () => void;
@@ -32,6 +34,11 @@ export function createTitleScreen(callbacks: {
   const tagline = createParagraph(STRINGS.title.tagline, { muted: true });
   const bestLine = createParagraph('');
   const begin = createButton(STRINGS.title.begin, callbacks.onBegin, { primary: true });
+  // Task 7.1: every player gets the same seed on the same UTC calendar day — a link
+  // button, not a second primary button, so "Begin a Passage" stays the one obvious
+  // default action (GAME_DESIGN.md §10's "two taps, under 3 seconds" loop is about the
+  // ordinary path, not this one).
+  const daily = createLinkButton('', callbacks.onBeginDaily);
   const settings = createLinkButton(STRINGS.title.settings, callbacks.onSettings);
 
   const installRow = document.createElement('div');
@@ -50,12 +57,13 @@ export function createTitleScreen(callbacks: {
   const installDismiss = createLinkButton(STRINGS.title.installDismiss, callbacks.onDismissInstall);
   installRow.append(installText, installAction, installDismiss);
 
-  content.append(heading, tagline, bestLine, begin, settings, installRow);
+  content.append(heading, tagline, bestLine, begin, daily, settings, installRow);
 
   return {
     root,
     update(profile: Profile): void {
       bestLine.textContent = profile.bestDistanceU > 0 ? STRINGS.title.bestDistance(profile.bestDistanceU) : '';
+      daily.textContent = STRINGS.title.daily(dailyDayNumber());
     },
     setInstallPromptVisible(visible: boolean): void {
       installRow.style.display = visible ? 'flex' : 'none';
