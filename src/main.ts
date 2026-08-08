@@ -28,10 +28,11 @@ import { createWorld, stepWorld, type World } from './sim/world.js';
 import { RngRegistry } from './core/rng.js';
 import type { Pool } from './core/pool.js';
 import { computeProjectionParams } from './render/camera.js';
-import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater } from './render/road.js';
+import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater, resetRoadTrailBase } from './render/road.js';
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
+import { drawInkTrail } from './render/trail.js';
 import { OffscreenLayers } from './render/layers.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
@@ -145,16 +146,21 @@ function bootstrap(): void {
       }
 
       const params = computeProjectionParams(metrics.cssWidth, metrics.cssHeight);
+      const brushX = clamp(world.brushFollower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
 
       if (layers.needsSkyWaterRegen) {
         drawSkyWater(layers.skyWaterCtx, metrics.cssWidth, metrics.cssHeight, params);
         layers.markSkyWaterClean();
       }
+      if (layers.needsRoadTrailReset) {
+        resetRoadTrailBase(layers.roadTrailCtx, metrics.cssWidth, metrics.cssHeight, params);
+        layers.markRoadTrailClean();
+      }
 
-      drawRoad(layers.roadTrailCtx, metrics.cssWidth, metrics.cssHeight, params, world.distanceU);
+      drawRoad(layers.roadTrailCtx, params, world.distanceU);
+      drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
 
       layers.clearActors();
-      const brushX = clamp(world.brushFollower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
       drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z);
       drawSlips(layers.actorsCtx, params, world.slipPool);
       if (world.currentGatePair !== null) {

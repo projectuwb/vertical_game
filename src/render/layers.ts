@@ -33,6 +33,7 @@ export class OffscreenLayers {
   private cssWidth: number;
   private cssHeight: number;
   private skyWaterStale = true;
+  private roadTrailStale = true;
   private hudDirty = true;
 
   constructor(cssWidth: number, cssHeight: number, dpr: number) {
@@ -67,6 +68,7 @@ export class OffscreenLayers {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
     this.skyWaterStale = true;
+    this.roadTrailStale = true;
     this.hudDirty = true;
   }
 
@@ -76,6 +78,18 @@ export class OffscreenLayers {
 
   markSkyWaterClean(): void {
     this.skyWaterStale = false;
+  }
+
+  /** True immediately after construction and after every resize — the road+trail layer
+   *  (Task 2.10) accumulates ink across frames rather than clearing, so a resize (which
+   *  invalidates every existing pixel's screen position anyway) needs an explicit signal
+   *  to repaint its base once before accumulation resumes, the same way sky/water does. */
+  get needsRoadTrailReset(): boolean {
+    return this.roadTrailStale;
+  }
+
+  markRoadTrailClean(): void {
+    this.roadTrailStale = false;
   }
 
   get isHudDirty(): boolean {

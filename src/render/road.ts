@@ -1,8 +1,11 @@
 // The road surface and its scrolling markings (GAME_DESIGN.md §3/§12, Task 2.1). Drawn
-// into the "road+trail" offscreen layer (src/render/layers.ts). For now this layer is
-// fully cleared and redrawn every frame; Task 2.10 changes that to the 6%-alpha-fade
-// accumulation TECH_SPEC.md §5 describes, once there's an ink trail that needs to persist
-// on top of it.
+// into the "road+trail" offscreen layer (src/render/layers.ts), which — as of Task
+// 2.10 — is a genuine accumulation layer: `resetRoadTrailBase` paints the lane once
+// (on load and after every resize, mirroring sky/water's regen-on-resize pattern), and
+// every ordinary frame only fades what's there by TRAIL_FADE_ALPHA (TECH_SPEC.md §5's
+// "6% alpha fade") before redrawing the edge lines and this frame's dashes on top —
+// never a hard clear, or the ink trail (trail.ts) painted into the same layer couldn't
+// persist across frames at all.
 
 import type { ProjectionParams } from './camera.js';
 import { project, type ProjectedPoint } from './projection.js';
@@ -29,6 +32,11 @@ const MARKING_HEIGHT_U = 0.01; // just above the road surface, avoids z-fighting
 // as continuing under the Brush rather than visibly stopping partway up the screen.
 const NEAR_DRAW_Z = -5.8;
 const FAR_DRAW_Z = 200;
+/** TECH_SPEC.md §5: "the trail accumulates here with a per-frame 6% alpha fade." Applies
+ *  to the whole road+trail layer, not just trail.ts's own paint — everything on this
+ *  layer (old dash ghosts included) decays at the same rate, back toward the lane's own
+ *  base colour (see resetRoadTrailBase/drawRoad below). */
+const TRAIL_FADE_ALPHA = 0.06;
 
 type Quad = readonly [ProjectedPoint, ProjectedPoint, ProjectedPoint, ProjectedPoint];
 
@@ -50,25 +58,45 @@ export function drawSkyWater(
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 }
 
-export function drawRoad(
+function laneQuad(params: ProjectionParams): Quad {
+  return [
+    project(-LANE_HALF_WIDTH, 0, NEAR_DRAW_Z, params),
+    project(LANE_HALF_WIDTH, 0, NEAR_DRAW_Z, params),
+    project(LANE_HALF_WIDTH, 0, FAR_DRAW_Z, params),
+    project(-LANE_HALF_WIDTH, 0, FAR_DRAW_Z, params),
+  ];
+}
+
+/**
+ * Paints the lane's opaque base once — on load and after every resize
+ * (layers.ts's `needsRoadTrailReset`), mirroring sky/water's regen-on-resize pattern.
+ * `drawRoad`'s per-frame 6%-alpha fade then maintains this base colour indefinitely
+ * (fading it toward itself is a no-op) without ever needing a hard repaint, which is
+ * exactly what lets trail.ts's ink persist and fade on the same layer instead of being
+ * wiped every frame.
+ */
+export function resetRoadTrailBase(
   ctx: CanvasRenderingContext2D,
   cssWidth: number,
   cssHeight: number,
   params: ProjectionParams,
-  scrollDistance: number,
 ): void {
   ctx.clearRect(0, 0, cssWidth, cssHeight);
+  fillQuad(ctx, laneQuad(params), PALETTE.slate);
+}
 
-  fillQuad(
-    ctx,
-    [
-      project(-LANE_HALF_WIDTH, 0, NEAR_DRAW_Z, params),
-      project(LANE_HALF_WIDTH, 0, NEAR_DRAW_Z, params),
-      project(LANE_HALF_WIDTH, 0, FAR_DRAW_Z, params),
-      project(-LANE_HALF_WIDTH, 0, FAR_DRAW_Z, params),
-    ],
-    PALETTE.slate,
-  );
+/**
+ * The per-frame road pass: fade everything already on the layer (old ink, old dash
+ * ghosts) by `TRAIL_FADE_ALPHA` toward the lane's base colour, then redraw the edge
+ * lines (always the same screen position, so fade-then-redraw-opaque keeps them
+ * permanently crisp) and this frame's dashes on top. Never clears — see
+ * `resetRoadTrailBase` for the one-time base paint this depends on.
+ */
+export function drawRoad(ctx: CanvasRenderingContext2D, params: ProjectionParams, scrollDistance: number): void {
+  ctx.save();
+  ctx.globalAlpha = TRAIL_FADE_ALPHA;
+  fillQuad(ctx, laneQuad(params), PALETTE.slate);
+  ctx.restore();
 
   drawEdgeLine(ctx, -LANE_HALF_WIDTH, params);
   drawEdgeLine(ctx, LANE_HALF_WIDTH, params);
