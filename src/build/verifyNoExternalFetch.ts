@@ -14,17 +14,30 @@ import { extname, join, resolve } from 'node:path';
 
 const DIST_DIR = resolve(process.cwd(), 'dist');
 
-/** Matches any absolute `http(s)://` URL. Vendored fonts, generated icons, and every
- *  actual asset reference in this codebase are same-origin relative paths — GAME_DESIGN.md
- *  and TECH_SPEC.md's "zero cost / offline-first" rules mean there is never a legitimate
- *  reason for an absolute external URL to appear anywhere in the shipped bundle at all,
- *  so this doesn't need an allowlist for CDNs or telemetry endpoints the way a typical
- *  app's equivalent check might. */
+/** Matches any absolute `http(s)://` URL. First-party code in this repo never has a
+ *  legitimate reason to reference one (GAME_DESIGN.md/TECH_SPEC.md's zero-cost/
+ *  offline-first rules — vendored fonts, generated icons, every real asset reference are
+ *  all same-origin relative paths). Third-party devDependency code bundled in (Task 5.4's
+ *  Capacitor packages) is a different story: `findExternalUrls` still finds every literal
+ *  match here, exhaustively — `main`'s own `KNOWN_BENIGN_URLS` below is where the
+ *  "is this actually a runtime network call, or just a source comment" judgement call
+ *  gets made, keeping this function's own contract simple and this file's one CLI
+ *  allowlist auditable in one place rather than silently loosening the matcher itself. */
 const EXTERNAL_URL_PATTERN = /https?:\/\/[^\s"'`)]+/g;
 
 export function findExternalUrls(source: string): string[] {
   return [...source.matchAll(EXTERNAL_URL_PATTERN)].map((m) => m[0]);
 }
+
+/** Every entry here has been manually checked against the actual bundled source to
+ *  confirm it's inert (a licence/attribution comment, not a network call) — add a new
+ *  entry only after that same check, with a comment explaining what was verified. */
+const KNOWN_BENIGN_URLS: ReadonlySet<string> = new Set([
+  // `@capacitor/core`'s own bundled licence header: `/*! Capacitor: https://capacitorjs.com/ - MIT License */`.
+  // Confirmed by grepping the built bundle: the URL appears only inside that comment,
+  // never as an argument to fetch/XMLHttpRequest/WebSocket/Image/etc.
+  'https://capacitorjs.com/',
+]);
 
 function listJsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -45,6 +58,7 @@ function main(): void {
   for (const file of jsFiles) {
     const source = readFileSync(file, 'utf8');
     for (const url of findExternalUrls(source)) {
+      if (KNOWN_BENIGN_URLS.has(url)) continue;
       offenders.push(`${file}: ${url}`);
     }
   }

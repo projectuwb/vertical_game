@@ -20,8 +20,12 @@
     "generate-sw": "npm run build:cli && node dist-cli/build/generateServiceWorker.js",
     "verify-offline": "npm run build:cli && node dist-cli/build/verifyNoExternalFetch.js"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/haptics": "^8.0.2",
     "@eslint/js": "^9.17.0",
     "@types/node": "^22.10.5",
     "eslint": "^9.17.0",

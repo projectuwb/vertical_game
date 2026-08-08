@@ -20,6 +20,8 @@ import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
 import { createStorage } from './platform/storage.js';
 import { createInstallPromptController, createWakeLockController, registerServiceWorker } from './platform/pwa.js';
+import { attachFlourishHaptics, fireLineLossHaptic } from './platform/haptics.js';
+import { App } from '@capacitor/app';
 import { computeRowClassCounts, type LineState } from './sim/line.js';
 import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
@@ -174,6 +176,7 @@ function bootstrap(): void {
   mixer.setMuted(profile.settings.muted);
   const music = createMusicController(mixer);
   attachSfx(world.events);
+  attachFlourishHaptics(world.events);
   document.addEventListener(
     'pointerdown',
     () => resumeAudioContext(mixer),
@@ -207,7 +210,9 @@ function bootstrap(): void {
     // first-ever Passage — `recordRunResult` (in `handlePassageDeath`) increments
     // `totalPassages` the instant this one ends, so it can never fire twice.
     world = createWorld(seed, profile.upgradeLevels, profile.totalPassages === 0);
-    attachSfx(world.events); // this Passage's own fresh event bus — the old one (and its listeners) is now unreachable
+    // This Passage's own fresh event bus — the old one (and its listeners) is now unreachable.
+    attachSfx(world.events);
+    attachFlourishHaptics(world.events);
     deathAtRealMs = null;
     layers.requestRoadTrailReset();
     setAppState('playing');
@@ -308,7 +313,14 @@ function bootstrap(): void {
     update: (dtFixed: number): void => {
       if (appState !== 'playing') return;
       const frame = input.sample(dtFixed);
+      const strokesBefore = world.line.strokes.length;
+      const sealActiveBefore = world.seal !== null;
       stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
+      // TECH_SPEC.md §11: haptics on Line loss and Seal impact — no dedicated /sim event
+      // for either (Task 4.4 deliberately scoped GameEvents to §12's audio-only list),
+      // so this diffs the Line's own Stroke count the same way every other per-step
+      // main.ts concern (e.g. the death check right below) already reads World directly.
+      fireLineLossHaptic(strokesBefore - world.line.strokes.length, sealActiveBefore);
       if (world.isDead && deathAtRealMs === null) {
         handlePassageDeath();
       }
@@ -399,6 +411,25 @@ function bootstrap(): void {
   // `attachVisibilityAutoPause` above already resumes the loop for.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && appState === 'playing') wakeLock.acquire();
+  });
+
+  // TECH_SPEC.md §11: "hardware back button mapped to pause/back-out (never straight to
+  // exit from a Passage)." The `backButton` event only ever fires inside a real Android
+  // WebView (Capacitor's own web implementation of `@capacitor/app` never dispatches it
+  // in a plain browser), so this is inert everywhere else without needing its own guard.
+  // Settings is the one screen with a real in-app "back" target (Title); everywhere else
+  // there's nowhere further back to go *within* the app, so the choice is minimize
+  // (mid-Passage — preserves World state entirely, the "pause" this task asks for) or
+  // exit (every other screen — profile progress is already saved by the time any of
+  // them can be showing, so there's nothing to lose).
+  App.addListener('backButton', () => {
+    if (appState === 'settings') {
+      setAppState('title');
+    } else if (appState === 'playing') {
+      App.minimizeApp();
+    } else {
+      App.exitApp();
+    }
   });
 
   const debugRequested = new URLSearchParams(window.location.search).get('debug') === '1';

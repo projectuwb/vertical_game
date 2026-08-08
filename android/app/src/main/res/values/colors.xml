@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- render/palette.ts's PALETTE (GAME_DESIGN.md §12) — the app-wide theme colours
+         styles.xml references. Not generated at build time like the launcher icons
+         (generateIcons.ts): these are plain XML colour values, not image files, so
+         there's nothing "no image files" (TECH_SPEC.md §7) is asking to avoid here. -->
+    <color name="colorPrimary">#2A3440</color>
+    <!-- slate -->
+    <color name="colorPrimaryDark">#171E26</color>
+    <!-- deep -->
+    <color name="colorAccent">#C9A227</color>
+    <!-- goldLeaf -->
+</resources>

@@ -1,16 +1,17 @@
-// Generates the PWA's app icons at build time (Task 5.1, TECH_SPEC.md §7: "App icons
-// (192, 512, maskable) and the splash are generated at build time by a Node script that
-// draws them with the same Canvas code as the game, so the icon is literally a
-// brushstroke rendered by the engine"). There is no `CanvasRenderingContext2D` in Node
-// (no `canvas` package — not in TECH_SPEC.md §2's devDependency list), so this rasterizes
-// the *exact same glyph geometry* `render/strokes.ts`'s `drawHaraiGlyph` uses (a Harai
-// stroke: GAME_DESIGN.md §4's "a long tapering diagonal sliver," the class most legible
-// as a single mark at icon scale) directly against a flat pixel buffer, using the same
-// two palette colours the real Harai stroke would ever be drawn in.
+// Generates every app icon at build time (Task 5.1's PWA icons, Task 5.4's Android
+// launcher icons — TECH_SPEC.md §7: "App icons (192, 512, maskable) and the splash are
+// generated at build time by a Node script that draws them with the same Canvas code as
+// the game, so the icon is literally a brushstroke rendered by the engine"). There is no
+// `CanvasRenderingContext2D` in Node (no `canvas` package — not in TECH_SPEC.md §2's
+// devDependency list), so this rasterizes the *exact same glyph geometry*
+// `render/strokes.ts`'s `drawHaraiGlyph` uses (a Harai stroke: GAME_DESIGN.md §4's "a
+// long tapering diagonal sliver," the class most legible as a single mark at icon scale)
+// directly against a flat pixel buffer, using the same two palette colours the real
+// Harai stroke would ever be drawn in.
 //
 //   npm run generate-icons   (also wired into `npm run build`, per TECH_SPEC.md §7)
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { encodePng } from './png.js';
 
@@ -24,21 +25,75 @@ const PALETTE_DEEP = [0x17, 0x1e, 0x26] as const; // #171E26 — background, mat
 const PALETTE_BONE = [0xe8, 0xe2, 0xd4] as const; // #E8E2D4 — Harai class colour
 
 interface IconSpec {
-  readonly fileName: string;
+  readonly outputPath: string;
   readonly sizePx: number;
   /** Fraction of the icon's own size the glyph's long axis spans — smaller for
-   *  `maskable` so the mark stays inside the ~80%-diameter safe zone every platform's
-   *  own masking shape (circle, squircle, rounded square...) is guaranteed to keep. */
+   *  `maskable`/Android-adaptive variants so the mark stays inside the ~66-80%-diameter
+   *  safe zone every platform's own masking shape (circle, squircle, rounded
+   *  square...) is guaranteed to keep. */
   readonly glyphScale: number;
+  /** Android's adaptive-icon foreground layer is composited *over* a separate
+   *  background colour (`ic_launcher_background.xml`) by the OS itself — it needs a
+   *  transparent backing, not an opaque one, unlike every other variant here. */
+  readonly transparentBackground: boolean;
 }
 
-const ICONS: readonly IconSpec[] = [
-  { fileName: 'icon-192.png', sizePx: 192, glyphScale: 0.7 },
-  { fileName: 'icon-512.png', sizePx: 512, glyphScale: 0.7 },
-  { fileName: 'icon-mask-512.png', sizePx: 512, glyphScale: 0.5 },
+const WEB_ICON_DIR = resolve(process.cwd(), 'public/icons');
+const ANDROID_RES_DIR = resolve(process.cwd(), 'android/app/src/main/res');
+
+// Standard Android launcher icon sizes (density-independent px at each bucket) — the
+// same five `mipmap-*` folders TECH_SPEC.md §11's `cap add android` scaffold already
+// created. `ic_launcher_foreground` conventionally renders its content within a
+// smaller safe area than the legacy square icon, since adaptive icons crop it into
+// varying OS-drawn shapes.
+const ANDROID_DENSITIES: readonly { readonly dir: string; readonly sizePx: number }[] = [
+  { dir: 'mipmap-mdpi', sizePx: 48 },
+  { dir: 'mipmap-hdpi', sizePx: 72 },
+  { dir: 'mipmap-xhdpi', sizePx: 96 },
+  { dir: 'mipmap-xxhdpi', sizePx: 144 },
+  { dir: 'mipmap-xxxhdpi', sizePx: 192 },
 ];
 
-const OUTPUT_DIR = resolve(process.cwd(), 'public/icons');
+function buildIconSpecs(): IconSpec[] {
+  const specs: IconSpec[] = [
+    { outputPath: resolve(WEB_ICON_DIR, 'icon-192.png'), sizePx: 192, glyphScale: 0.7, transparentBackground: false },
+    { outputPath: resolve(WEB_ICON_DIR, 'icon-512.png'), sizePx: 512, glyphScale: 0.7, transparentBackground: false },
+    {
+      outputPath: resolve(WEB_ICON_DIR, 'icon-mask-512.png'),
+      sizePx: 512,
+      glyphScale: 0.5,
+      transparentBackground: false,
+    },
+  ];
+
+  // The Android platform is generated once via `npx cap add android` (TECH_SPEC.md §11)
+  // and its whole directory is committed — but skip gracefully rather than crash the
+  // (more fundamental) web PWA icon generation if a checkout genuinely doesn't have it.
+  if (existsSync(ANDROID_RES_DIR)) {
+    for (const { dir, sizePx } of ANDROID_DENSITIES) {
+      specs.push({
+        outputPath: resolve(ANDROID_RES_DIR, dir, 'ic_launcher.png'),
+        sizePx,
+        glyphScale: 0.7,
+        transparentBackground: false,
+      });
+      specs.push({
+        outputPath: resolve(ANDROID_RES_DIR, dir, 'ic_launcher_round.png'),
+        sizePx,
+        glyphScale: 0.7,
+        transparentBackground: false,
+      });
+      specs.push({
+        outputPath: resolve(ANDROID_RES_DIR, dir, 'ic_launcher_foreground.png'),
+        sizePx,
+        glyphScale: 0.4,
+        transparentBackground: true,
+      });
+    }
+  }
+
+  return specs;
+}
 
 type Point = readonly [number, number];
 type Triangle = readonly [Point, Point, Point];
@@ -72,13 +127,13 @@ function pointInTriangle(px: number, py: number, tri: Triangle): boolean {
 }
 
 function renderIcon(spec: IconSpec): Buffer {
-  const { sizePx, glyphScale } = spec;
+  const { sizePx, glyphScale, transparentBackground } = spec;
   const rgba = new Uint8Array(sizePx * sizePx * 4);
   for (let i = 0; i < sizePx * sizePx; i++) {
     rgba[i * 4] = PALETTE_DEEP[0];
     rgba[i * 4 + 1] = PALETTE_DEEP[1];
     rgba[i * 4 + 2] = PALETTE_DEEP[2];
-    rgba[i * 4 + 3] = 255;
+    rgba[i * 4 + 3] = transparentBackground ? 0 : 255;
   }
 
   const glyphSize = sizePx * glyphScale;
@@ -113,12 +168,13 @@ function renderIcon(spec: IconSpec): Buffer {
 }
 
 function main(): void {
-  mkdirSync(OUTPUT_DIR, { recursive: true });
-  for (const spec of ICONS) {
+  const specs = buildIconSpecs();
+  mkdirSync(WEB_ICON_DIR, { recursive: true });
+  for (const spec of specs) {
     const png = renderIcon(spec);
-    writeFileSync(resolve(OUTPUT_DIR, spec.fileName), png);
+    writeFileSync(spec.outputPath, png);
   }
-  console.log(`Generated ${ICONS.length} icon(s) into ${OUTPUT_DIR}`);
+  console.log(`Generated ${specs.length} icon(s) (web + ${existsSync(ANDROID_RES_DIR) ? 'Android' : 'no Android platform found'}).`);
 }
 
 main();

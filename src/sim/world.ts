@@ -435,6 +435,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     world.wetness = spendWetness(world.wetness, BALANCE.flourish.cost);
     const rowCount = Math.ceil(world.line.strokes.length / BALANCE.line.rowSize);
     applyFlourishSweep(world.blotPool, brushX, BRUSH_Z, rowCount);
+    world.events.emit('flourishTriggered', {});
   }
   world.previousHolding = input.holding;
 

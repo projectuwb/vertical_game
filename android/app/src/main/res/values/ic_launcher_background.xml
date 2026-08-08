@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches PALETTE.deep (render/palette.ts, GAME_DESIGN.md §12) — the adaptive
+         icon's background layer composites underneath ic_launcher_foreground.png. -->
+    <color name="ic_launcher_background">#171E26</color>
+</resources>
