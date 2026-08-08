@@ -78,8 +78,8 @@ Mean/median passage-length and peak-Line targets are evaluated against the `mixe
 | Strategy dominance (spread in median Gold Leaf across strategies) | FAIL | 55.2% spread vs target ≤20% (greedy-slips=9879, greedy-kill=9465, mixed=9942, gates=11528, random=7428) |
 | First Seal reached, zero upgrades | PASS | 95.5% vs target ≥70% |
 | First Seal broken, zero upgrades | FAIL | 95.5% vs target 25-45% (no bot strategy fights a Seal intelligently yet, so this is a floor) |
-| Median Passage length, all upgrades level 5 | N/A | the Inkstone/upgrade system does not exist yet (Task 4.2) |
-| Median peak Line, upgrades level 5 | N/A | the Inkstone/upgrade system does not exist yet (Task 4.2) |
-| Runs to afford first upgrade | N/A | the Inkstone/upgrade system does not exist yet (Task 4.2) |
-| Runs to Inkstone level 40 | N/A | the Inkstone/upgrade system does not exist yet (Task 4.2) |
+| Median Passage length, all upgrades level 5 | N/A | rerun with --upgrades 5 to measure this |
+| Median peak Line, upgrades level 5 | N/A | rerun with --upgrades 5 to measure this |
+| Runs to afford first upgrade | N/A | needs a multi-Passage meta-progression simulation (Gold Leaf carried and spent across runs) — this harness only simulates one Passage at a time; Task 4.6's balance pass is where that harness extension belongs |
+| Runs to Inkstone level 40 | N/A | same as above — a single-Passage harness has nothing to measure this against |
 | Deaths from Crust | N/A | per-Blot-class death attribution is not tracked yet |

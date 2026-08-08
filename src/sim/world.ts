@@ -13,6 +13,7 @@ import {
   computeRowClassCounts,
   createLine,
   removeStrokesFromFront,
+  setLineCount,
   stepCriticallyDamped,
   type ClassCounts,
   type DampedFollower1D,
@@ -109,6 +110,8 @@ import {
 import { SMEAR_SEAL_DEFINITION } from './seals/smear.js';
 import { PRESS_SEAL_DEFINITION } from './seals/press.js';
 import { BLANK_SEAL_DEFINITION } from './seals/blank.js';
+import { computeUpgradeEffects, NO_UPGRADES, type UpgradeEffects } from './upgradeEffects.js';
+import type { InkstoneTrackId } from './config.js';
 import type { Pool } from '../core/pool.js';
 
 /** The Brush's fixed world-space depth — the world scrolls past it, not the other way
@@ -188,13 +191,33 @@ export interface World {
 
   isDead: boolean;
   deathCause: DeathCause | null;
+
+  /** Computed once at `createWorld` from the Inkstone levels a Passage started with
+   *  (Task 4.2) — `BALANCE` itself stays frozen, so every /sim call site that needs an
+   *  upgrade-adjusted value reads it from here rather than re-deriving from raw levels
+   *  every step. */
+  readonly upgradeEffects: UpgradeEffects;
+  /** Second Draft (GAME_DESIGN.md §10: "Levels 1/4/8 grant a revive at 35% of peak
+   *  Line"). Seeded from `upgradeEffects.reviveThresholdsMet` and decremented each time
+   *  `killLineIfEmpty` actually uses one — unlike `upgradeEffects`, this genuinely
+   *  changes over the course of a Passage. */
+  revivesRemaining: number;
 }
 
-export function createWorld(seed: number): World {
+/** `upgradeLevels` defaults to zero everywhere (`NO_UPGRADES`) — every existing caller
+ *  (the harness, main.ts before Task 4.3's screens wire a real Profile in, every test)
+ *  keeps behaving exactly as before without passing anything. */
+export function createWorld(
+  seed: number,
+  upgradeLevels: Readonly<Record<InkstoneTrackId, number>> = NO_UPGRADES,
+): World {
   const rng = new RngRegistry(seed);
+  const upgradeEffects = computeUpgradeEffects(upgradeLevels);
+  const startCount = BALANCE.line.startCount + upgradeEffects.startingStrokeBonus;
+  const wetnessCap = BALANCE.wetness.max + upgradeEffects.wetnessCapBonus;
   return {
     rng,
-    line: createLine(BALANCE.line.startCount, 'hane'),
+    line: createLine(startCount, 'hane'),
     temper: createTemperState(),
 
     projectilePool: createProjectilePool(),
@@ -227,16 +250,19 @@ export function createWorld(seed: number): World {
     sealsBroken: 0,
     growthErasedUntilS: 0,
 
-    wetness: createWetnessState(),
+    wetness: createWetnessState(wetnessCap),
     flourish: createFlourishState(),
     phrase: createPhraseState(),
     previousHolding: false,
 
     blotKilled: 0,
-    peakLineCount: BALANCE.line.startCount,
+    peakLineCount: startCount,
 
     isDead: false,
     deathCause: null,
+
+    upgradeEffects,
+    revivesRemaining: upgradeEffects.reviveThresholdsMet,
   };
 }
 
@@ -311,11 +337,27 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * The Line hitting 0 normally ends the Passage — unless Second Draft has a revive left
+ * (GAME_DESIGN.md §10: "Levels 1/4/8 grant a revive at 35% of peak Line," Task 4.2),
+ * in which case it's spent here instead: the Line refills to `revivePeakFraction` of
+ * its own peak size (never its *current* target, which is 0) and the Passage carries
+ * on under whichever `cause` would otherwise have ended it. Refilled with Hane, the
+ * same class every Passage starts with — GAME_DESIGN.md doesn't specify a revived
+ * Line's class, logged in DECISIONS.md.
+ */
 function killLineIfEmpty(world: World, cause: DeathCause): void {
-  if (!world.isDead && world.line.strokes.length === 0) {
-    world.isDead = true;
-    world.deathCause = cause;
+  if (world.isDead || world.line.strokes.length > 0) return;
+
+  if (world.revivesRemaining > 0) {
+    world.revivesRemaining--;
+    const reviveCount = Math.ceil(world.peakLineCount * BALANCE.inkstone.secondDraft.revivePeakFraction);
+    world.line = setLineCount(world.line, reviveCount, 'hane');
+    return;
   }
+
+  world.isDead = true;
+  world.deathCause = cause;
 }
 
 export function stepWorld(world: World, dtFixed: number, input: WorldInput): void {
@@ -349,6 +391,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     input.holding,
     world.previousHolding,
     world.wetness.current,
+    world.upgradeEffects.flourishCooldownS,
   );
   world.flourish = flourishResult.state;
   if (flourishResult.triggered) {
@@ -360,14 +403,26 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
 
   const { front, back } = computeRowClassCounts(world.line);
   const sources = computeFrontRowSourcePositions(world.line, brushX, BRUSH_Z);
+  const wetnessCap = BALANCE.wetness.max + world.upgradeEffects.wetnessCapBonus;
   if (!input.holding) {
-    const rateMultiplier = isWetnessDry(world.wetness) ? BALANCE.wetness.dryFireRateMult : 1;
-    updateFiring(world.firingAccumulators, world.projectilePool, dtFixed, front, back, sources, rateMultiplier);
+    const dryMultiplier = isWetnessDry(world.wetness) ? BALANCE.wetness.dryFireRateMult : 1;
+    const rateMultiplier = dryMultiplier * world.upgradeEffects.fireRateMultiplier;
+    updateFiring(
+      world.firingAccumulators,
+      world.projectilePool,
+      dtFixed,
+      front,
+      back,
+      sources,
+      rateMultiplier,
+      world.upgradeEffects.damageMultiplier,
+      world.upgradeEffects.rangeMultiplier,
+    );
   }
   updateProjectileMotion(world.projectilePool, dtFixed);
 
   const isFiring = !input.holding && world.line.strokes.length > 0;
-  world.wetness = stepWetness(world.wetness, dtFixed, isFiring);
+  world.wetness = stepWetness(world.wetness, dtFixed, isFiring, wetnessCap);
 
   // Phrases (GAME_DESIGN.md §4) run off the same front-row counts firing just used, and
   // — like Flourish's sweep — before this step's own resolveBlotDeaths, so a Phrase
@@ -386,7 +441,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   }
 
   updateSlipMotion(world.slipPool, dtFixed);
-  resolveProjectileSlipCollisions(world.projectilePool, world.slipPool);
+  resolveProjectileSlipCollisions(world.projectilePool, world.slipPool, world.upgradeEffects.slipDamageMultiplier);
   const backSlot = computeFormationSlot(world.line.strokes.length);
   resolveSlipDeaths(world.slipPool, world.joiningRecruitPool, {
     x: brushX + backSlot.lateralOffset,
@@ -452,7 +507,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   }
 
   updateInkPoolMotion(world.inkPoolPool, dtFixed);
-  world.wetness = resolveInkPoolContact(world.inkPoolPool, world.wetness, brushX, BRUSH_Z);
+  world.wetness = resolveInkPoolContact(world.inkPoolPool, world.wetness, brushX, BRUSH_Z, wetnessCap);
 
   if (world.line.strokes.length > world.peakLineCount) {
     world.peakLineCount = world.line.strokes.length;
@@ -550,17 +605,3 @@ function spawnSlipRun(world: World, pressure: number, mercyActive: boolean): voi
   }
 }
 
-/**
- * GAME_DESIGN.md §10: `blotKilled × 1 + floor(distance / 8) + sealsBroken × 120`, before
- * the Leaf upgrade multiplier (Task 4.2 — Seals don't exist until Phase 3 either, so
- * that term is always 0 for now). Lives here rather than /meta/economy.ts until Task
- * 4.2 actually builds the upgrade system this formula's last step depends on.
- */
-export function computeGoldLeaf(blotKilled: number, distanceU: number, sealsBroken: number): number {
-  const e = BALANCE.economy;
-  return (
-    blotKilled * e.goldLeafPerBlotKilled +
-    Math.floor(distanceU / e.goldLeafPerDistanceU) +
-    sealsBroken * e.goldLeafPerSealBroken
-  );
-}

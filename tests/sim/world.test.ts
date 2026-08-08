@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/sim/config.js';
-import { computeGoldLeaf, createWorld, stepWorld, type WorldInput } from '../../src/sim/world.js';
+import { createWorld, stepWorld, type WorldInput } from '../../src/sim/world.js';
 import { spawnBlot } from '../../src/sim/blot.js';
 import { spawnSlip } from '../../src/sim/slips.js';
 import { spawnInkPool } from '../../src/sim/wetness.js';
@@ -253,18 +253,5 @@ describe('wetness/Flourish integration', () => {
     stepWorld(world, DT, NO_INPUT);
 
     expect(world.wetness.current).toBeGreaterThan(drained);
-  });
-});
-
-describe('computeGoldLeaf', () => {
-  it('matches GAME_DESIGN.md §10: blotKilled + floor(distance/8) + sealsBroken*120', () => {
-    const e = BALANCE.economy;
-    expect(computeGoldLeaf(10, 800, 1)).toBe(
-      10 * e.goldLeafPerBlotKilled + Math.floor(800 / e.goldLeafPerDistanceU) + 1 * e.goldLeafPerSealBroken,
-    );
-  });
-
-  it('floors the distance term rather than rounding', () => {
-    expect(computeGoldLeaf(0, 15, 0)).toBe(Math.floor(15 / BALANCE.economy.goldLeafPerDistanceU));
   });
 });

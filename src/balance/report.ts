@@ -106,12 +106,18 @@ interface TargetRow {
  *  measure of real player skill. See DECISIONS.md for why this list of gaps is where
  *  the line is drawn for Task 2.7 (and what changed for Task 3.5).
  */
-function evaluateTargets(results: readonly RunResult[], strategyResults: Map<BotStrategy, RunResult[]>): TargetRow[] {
+function evaluateTargets(
+  results: readonly RunResult[],
+  strategyResults: Map<BotStrategy, RunResult[]>,
+  upgradeLevel: number,
+): TargetRow[] {
   const t = BALANCE.balanceTargets;
   const rows: TargetRow[] = [];
+  const isZeroUpgrades = upgradeLevel === 0;
+  const zeroUpgradesNote = `this batch used --upgrades ${upgradeLevel}, not 0 — rerun with --upgrades 0 (the default) to measure this`;
 
   const mixed = strategyResults.get('mixed') ?? [];
-  if (mixed.length > 0) {
+  if (mixed.length > 0 && isZeroUpgrades) {
     const medianLen = median(mixed.map((r) => r.passageLengthS));
     rows.push({
       name: 'Median Passage length, zero upgrades (mixed bot)',
@@ -134,10 +140,11 @@ function evaluateTargets(results: readonly RunResult[], strategyResults: Map<Bot
       detail: `${formatNum(fraction * 100, 1)}% vs target ≤${formatNum(t.deathsWithin8sOfGateMaxFraction * 100, 0)}%`,
     });
   } else {
+    const detail = mixed.length === 0 ? 'no mixed-strategy runs in this batch' : zeroUpgradesNote;
     rows.push(
-      { name: 'Median Passage length, zero upgrades', status: 'N/A', detail: 'no mixed-strategy runs in this batch' },
-      { name: 'Median peak Line, zero upgrades', status: 'N/A', detail: 'no mixed-strategy runs in this batch' },
-      { name: 'Deaths within 8s of a Gate', status: 'N/A', detail: 'no mixed-strategy runs in this batch' },
+      { name: 'Median Passage length, zero upgrades', status: 'N/A', detail },
+      { name: 'Median peak Line, zero upgrades', status: 'N/A', detail },
+      { name: 'Deaths within 8s of a Gate', status: 'N/A', detail },
     );
   }
 
@@ -159,29 +166,66 @@ function evaluateTargets(results: readonly RunResult[], strategyResults: Map<Bot
     rows.push({ name: 'Strategy dominance', status: 'N/A', detail: 'needs 2+ strategies in one batch (run without --strategy)' });
   }
 
-  const sealReachedFraction = results.length === 0 ? NaN : results.filter((r) => r.sealReached).length / results.length;
-  rows.push({
-    name: 'First Seal reached, zero upgrades',
-    status: sealReachedFraction >= t.firstSealReachedZeroUpgradesMinFraction ? 'PASS' : 'FAIL',
-    detail: `${formatNum(sealReachedFraction * 100, 1)}% vs target ≥${formatNum(t.firstSealReachedZeroUpgradesMinFraction * 100, 0)}%`,
-  });
+  if (isZeroUpgrades) {
+    const sealReachedFraction = results.length === 0 ? NaN : results.filter((r) => r.sealReached).length / results.length;
+    rows.push({
+      name: 'First Seal reached, zero upgrades',
+      status: sealReachedFraction >= t.firstSealReachedZeroUpgradesMinFraction ? 'PASS' : 'FAIL',
+      detail: `${formatNum(sealReachedFraction * 100, 1)}% vs target ≥${formatNum(t.firstSealReachedZeroUpgradesMinFraction * 100, 0)}%`,
+    });
 
-  const sealBrokenFraction = results.length === 0 ? NaN : results.filter((r) => r.sealBroken).length / results.length;
-  rows.push({
-    name: 'First Seal broken, zero upgrades',
-    status:
-      sealBrokenFraction >= t.firstSealBrokenZeroUpgradesFraction.min &&
-      sealBrokenFraction <= t.firstSealBrokenZeroUpgradesFraction.max
-        ? 'PASS'
-        : 'FAIL',
-    detail: `${formatNum(sealBrokenFraction * 100, 1)}% vs target ${formatNum(t.firstSealBrokenZeroUpgradesFraction.min * 100, 0)}-${formatNum(t.firstSealBrokenZeroUpgradesFraction.max * 100, 0)}% (no bot strategy fights a Seal intelligently yet, so this is a floor)`,
-  });
+    const sealBrokenFraction = results.length === 0 ? NaN : results.filter((r) => r.sealBroken).length / results.length;
+    rows.push({
+      name: 'First Seal broken, zero upgrades',
+      status:
+        sealBrokenFraction >= t.firstSealBrokenZeroUpgradesFraction.min &&
+        sealBrokenFraction <= t.firstSealBrokenZeroUpgradesFraction.max
+          ? 'PASS'
+          : 'FAIL',
+      detail: `${formatNum(sealBrokenFraction * 100, 1)}% vs target ${formatNum(t.firstSealBrokenZeroUpgradesFraction.min * 100, 0)}-${formatNum(t.firstSealBrokenZeroUpgradesFraction.max * 100, 0)}% (no bot strategy fights a Seal intelligently yet, so this is a floor)`,
+    });
+  } else {
+    rows.push(
+      { name: 'First Seal reached, zero upgrades', status: 'N/A', detail: zeroUpgradesNote },
+      { name: 'First Seal broken, zero upgrades', status: 'N/A', detail: zeroUpgradesNote },
+    );
+  }
+
+  const isLevel5 = upgradeLevel === 5;
+  if (mixed.length > 0 && isLevel5) {
+    const medianLen = median(mixed.map((r) => r.passageLengthS));
+    rows.push({
+      name: 'Median Passage length, all upgrades level 5 (mixed bot)',
+      status:
+        medianLen >= t.passageLengthSMaxUpgrades.min && medianLen <= t.passageLengthSMaxUpgrades.max ? 'PASS' : 'FAIL',
+      detail: `${formatNum(medianLen)}s vs target ${t.passageLengthSMaxUpgrades.min}-${t.passageLengthSMaxUpgrades.max}s`,
+    });
+
+    const medianPeak = median(mixed.map((r) => r.peakLine));
+    rows.push({
+      name: 'Median peak Line, upgrades level 5 (mixed bot)',
+      status: medianPeak >= t.peakLineMaxUpgrades.min && medianPeak <= t.peakLineMaxUpgrades.max ? 'PASS' : 'FAIL',
+      detail: `${formatNum(medianPeak, 0)} vs target ${t.peakLineMaxUpgrades.min}-${t.peakLineMaxUpgrades.max}`,
+    });
+  } else {
+    const detail = mixed.length === 0 ? 'no mixed-strategy runs in this batch' : 'rerun with --upgrades 5 to measure this';
+    rows.push(
+      { name: 'Median Passage length, all upgrades level 5', status: 'N/A', detail },
+      { name: 'Median peak Line, upgrades level 5', status: 'N/A', detail },
+    );
+  }
 
   rows.push(
-    { name: 'Median Passage length, all upgrades level 5', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
-    { name: 'Median peak Line, upgrades level 5', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
-    { name: 'Runs to afford first upgrade', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
-    { name: 'Runs to Inkstone level 40', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
+    {
+      name: 'Runs to afford first upgrade',
+      status: 'N/A',
+      detail: 'needs a multi-Passage meta-progression simulation (Gold Leaf carried and spent across runs) — this harness only simulates one Passage at a time; Task 4.6\'s balance pass is where that harness extension belongs',
+    },
+    {
+      name: 'Runs to Inkstone level 40',
+      status: 'N/A',
+      detail: 'same as above — a single-Passage harness has nothing to measure this against',
+    },
     { name: 'Deaths from Crust', status: 'N/A', detail: 'per-Blot-class death attribution is not tracked yet' },
   );
 
@@ -202,7 +246,7 @@ export function generateReport(results: readonly RunResult[], meta: ReportMeta):
   lines.push(`Generated by \`npm run sim\` (TECH_SPEC.md §6). ${results.length} Passages, base seed ${meta.seed}, upgrades=${meta.upgrades}.`);
   if (meta.upgrades !== 0) {
     lines.push('');
-    lines.push('> `--upgrades` was requested nonzero, but the Inkstone/upgrade system does not exist yet (Task 4.2) — every run below used the zero-upgrade baseline regardless.');
+    lines.push(`> \`--upgrades ${meta.upgrades}\` applies level ${meta.upgrades} uniformly across all eight Inkstone tracks (Task 4.2) — not a real player's spend pattern (which would concentrate levels rather than spread them evenly), just a uniform stand-in until Task 4.6's real balance pass.`);
   }
   if (meta.sweepNote !== null) {
     lines.push('');
@@ -256,7 +300,7 @@ export function generateReport(results: readonly RunResult[], meta: ReportMeta):
   lines.push('');
   lines.push('| Target | Status | Detail |');
   lines.push('|---|---|---|');
-  for (const row of evaluateTargets(results, strategyResults)) {
+  for (const row of evaluateTargets(results, strategyResults, meta.upgrades)) {
     lines.push(`| ${row.name} | ${row.status} | ${row.detail} |`);
   }
   lines.push('');

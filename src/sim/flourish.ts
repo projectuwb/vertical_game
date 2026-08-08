@@ -45,12 +45,17 @@ export interface FlourishStepResult {
  * current `timeS` is enough to derive elapsed charge time at any point, so there's
  * nothing to drift between steps.
  */
+/** `cooldownS` defaults to `BALANCE.flourish.cooldownS` but accepts an upgrade-adjusted
+ *  value (the Flourish Study Inkstone track, Task 4.2: "-0.4s Flourish cooldown per
+ *  level, floor 2.0s") — already reduced and floored by the caller (see
+ *  `upgradeEffects.ts`'s `flourishCooldownS`), used as-is here. */
 export function stepFlourishInput(
   state: FlourishState,
   timeS: number,
   holding: boolean,
   wasHolding: boolean,
   wetnessCurrent: number,
+  cooldownS: number = BALANCE.flourish.cooldownS,
 ): FlourishStepResult {
   const f = BALANCE.flourish;
 
@@ -70,7 +75,7 @@ export function stepFlourishInput(
     const chargedLongEnough = state.chargeStartS !== null && timeS - state.chargeStartS >= f.chargeTimeS;
     if (chargedLongEnough) {
       return {
-        state: { chargeStartS: null, cooldownUntilS: timeS + f.cooldownS, isPulsing: false },
+        state: { chargeStartS: null, cooldownUntilS: timeS + cooldownS, isPulsing: false },
         triggered: true,
       };
     }

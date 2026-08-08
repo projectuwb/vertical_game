@@ -50,20 +50,23 @@ export interface FiringPlan {
  * many projectiles represent it on screen. `rateMultiplier` (default 1) scales the
  * desired rate before the cap/compensation math runs, so wetness.ts's dry-state ×0.5
  * (GAME_DESIGN.md §6) actually halves the shot count rather than halving already-capped
- * damage.
+ * damage. `damageMultiplier` (default 1, the Grind Inkstone track, Task 4.2: "+4%
+ * damage per level") scales per-shot damage directly and composes independently of
+ * `rateMultiplier` — Grind should not change how many projectiles spawn.
  */
 export function computeFiringPlan(
   cls: StrokeClass,
   frontRowCount: number,
   backRowCount: number,
   rateMultiplier = 1,
+  damageMultiplier = 1,
 ): FiringPlan {
   const stats = BALANCE.strokes[cls];
   const effectiveStrokeCount = frontRowCount + backRowCount * BALANCE.line.extraRowDpsContribution;
   const desiredRate = stats.fireRatePerS * effectiveStrokeCount * rateMultiplier;
   const cap = BALANCE.line.maxVisibleProjectilesPerClassPerS;
   const spawnRatePerS = Math.min(desiredRate, cap);
-  const damagePerProjectile = spawnRatePerS > 0 ? stats.damage * (desiredRate / spawnRatePerS) : 0;
+  const damagePerProjectile = spawnRatePerS > 0 ? stats.damage * damageMultiplier * (desiredRate / spawnRatePerS) : 0;
   return { spawnRatePerS, damagePerProjectile };
 }
 
@@ -99,7 +102,9 @@ const ALL_CLASSES: readonly StrokeClass[] = ['hane', 'tome', 'harai'];
 /**
  * Advances each class's firing accumulator by `dt` and spawns any projectiles that
  * come due, cycling through that class's front-row source positions for muzzle
- * variety. Mutates `accumulators` and `pool` in place.
+ * variety. Mutates `accumulators` and `pool` in place. `damageMultiplier`/
+ * `rangeMultiplier` (both default 1) are the Grind/Reach Inkstone tracks (Task 4.2),
+ * threaded straight through to `computeFiringPlan`/`spawnProjectile`.
  */
 export function updateFiring(
   accumulators: FiringAccumulators,
@@ -109,9 +114,11 @@ export function updateFiring(
   backRowCounts: Record<StrokeClass, number>,
   frontRowSources: Record<StrokeClass, readonly FrontRowSource[]>,
   rateMultiplier = 1,
+  damageMultiplier = 1,
+  rangeMultiplier = 1,
 ): void {
   for (const cls of ALL_CLASSES) {
-    const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls], rateMultiplier);
+    const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls], rateMultiplier, damageMultiplier);
     const sources = frontRowSources[cls];
     const state = accumulators[cls];
 
@@ -125,7 +132,7 @@ export function updateFiring(
       state.timeAccumulator -= 1;
       const source = sources[state.muzzleCursor % sources.length] as FrontRowSource;
       state.muzzleCursor++;
-      spawnProjectile(pool, cls, source.x, source.z, plan.damagePerProjectile);
+      spawnProjectile(pool, cls, source.x, source.z, plan.damagePerProjectile, rangeMultiplier);
     }
   }
 }
@@ -136,6 +143,7 @@ function spawnProjectile(
   x: number,
   z: number,
   damage: number,
+  rangeMultiplier = 1,
 ): void {
   const projectile = pool.acquire();
   if (projectile === undefined) return; // pool exhausted — a perf ceiling, not a gameplay bug
@@ -147,7 +155,7 @@ function spawnProjectile(
   projectile.pierceRemaining = cls === 'harai' ? BALANCE.strokes.harai.pierceCount : 1;
   projectile.splashRadiusU = cls === 'tome' ? BALANCE.strokes.tome.splashRadiusU : 0;
   projectile.distanceTraveledU = 0;
-  projectile.maxRangeU = stats.rangeU;
+  projectile.maxRangeU = stats.rangeU * rangeMultiplier;
 }
 
 /** Moves every active projectile forward (+z, toward the oncoming Blot) and releases
@@ -169,15 +177,20 @@ export function updateProjectileMotion(pool: Pool<Projectile>, dt: number): void
 
 export type DamageTargetKind = 'normal' | 'crust' | 'slip';
 
-/** GAME_DESIGN.md §4's armour-multiplier table. */
+/** GAME_DESIGN.md §4's armour-multiplier table. `slipDamageMultiplier` (default 1) is
+ *  the Reach Inkstone track's Slip-damage component (Task 4.2: "+2% Slip damage per
+ *  level"), composing with the class's own `vsSlips` — irrelevant for any other
+ *  `target`, so it's a no-op there rather than needing a separate parameter per target
+ *  kind. */
 export function applyArmorMultiplier(
   cls: StrokeClass,
   baseDamage: number,
   target: DamageTargetKind,
+  slipDamageMultiplier = 1,
 ): number {
   const stats = BALANCE.strokes[cls];
   if (target === 'crust') return baseDamage * stats.vsCrust;
-  if (target === 'slip') return baseDamage * stats.vsSlips;
+  if (target === 'slip') return baseDamage * stats.vsSlips * slipDamageMultiplier;
   return baseDamage;
 }
 

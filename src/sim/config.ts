@@ -444,3 +444,29 @@ const balance = {
 export const BALANCE = deepFreeze(balance);
 
 export type Balance = typeof BALANCE;
+
+/** `BALANCE.inkstone`'s eight track keys, named explicitly rather than derived from
+ *  `keyof typeof BALANCE.inkstone` (which would also pull in `levelsPerTrack`/
+ *  `costGrowthPerLevel` — not tracks). Lives here, not in /meta, because /sim's own
+ *  upgrade-effect application (`upgradeEffects.ts`) needs this shape without depending
+ *  on /meta — /meta/profile.ts imports it from here instead of keeping its own copy. */
+export type InkstoneTrackId =
+  | 'openingStroke'
+  | 'grind'
+  | 'nib'
+  | 'well'
+  | 'leaf'
+  | 'reach'
+  | 'flourishStudy'
+  | 'secondDraft';
+
+export const INKSTONE_TRACK_IDS: readonly InkstoneTrackId[] = [
+  'openingStroke',
+  'grind',
+  'nib',
+  'well',
+  'leaf',
+  'reach',
+  'flourishStudy',
+  'secondDraft',
+];

@@ -82,9 +82,12 @@ function applySplash(blotPool: Pool<Blot>, proj: Projectile, primary: Blot): voi
  * projectile that hits a Slip is otherwise resolved exactly like hitting a Blot: pierce
  * still applies, the projectile is still consumed per registerHit().
  */
+/** `slipDamageMultiplier` (default 1) is the Reach Inkstone track's Slip-damage
+ *  component (Task 4.2) — see `applyArmorMultiplier`. */
 export function resolveProjectileSlipCollisions(
   projectilePool: Pool<Projectile>,
   slipPool: Pool<Slip>,
+  slipDamageMultiplier = 1,
 ): void {
   for (let pi = projectilePool.activeCount - 1; pi >= 0; pi--) {
     const proj = projectilePool.get(pi);
@@ -104,7 +107,7 @@ export function resolveProjectileSlipCollisions(
 
     if (hitSlip === undefined) continue;
 
-    hitSlip.hp -= applyArmorMultiplier(proj.class, proj.damage, 'slip');
+    hitSlip.hp -= applyArmorMultiplier(proj.class, proj.damage, 'slip', slipDamageMultiplier);
 
     if (registerHit(proj)) {
       projectilePool.release(proj);

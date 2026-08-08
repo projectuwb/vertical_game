@@ -13,8 +13,11 @@ export interface WetnessState {
   readonly timeSinceStoppedFiringS: number;
 }
 
-export function createWetnessState(): WetnessState {
-  return { current: BALANCE.wetness.max, timeSinceStoppedFiringS: 0 };
+/** `cap` defaults to `BALANCE.wetness.max` but accepts an upgrade-adjusted value (the
+ *  Well Inkstone track, Task 4.2: "+8 Wetness cap per level") — a Passage started with
+ *  Well levels already owned should start full at *that* cap, not the base one. */
+export function createWetnessState(cap: number = BALANCE.wetness.max): WetnessState {
+  return { current: cap, timeSinceStoppedFiringS: 0 };
 }
 
 export function isWetnessDry(state: WetnessState): boolean {
@@ -22,8 +25,10 @@ export function isWetnessDry(state: WetnessState): boolean {
 }
 
 /** GAME_DESIGN.md §6: drains 6.0/s flat while firing (regardless of N — "a big Line must
- *  not be punished"); refills 25/s once 0.8s have passed since firing last stopped. */
-export function stepWetness(state: WetnessState, dt: number, isFiring: boolean): WetnessState {
+ *  not be punished"); refills 25/s once 0.8s have passed since firing last stopped.
+ *  `cap` is the same upgrade-adjusted Well cap `createWetnessState`/
+ *  `resolveInkPoolContact` take — defaults to the base `BALANCE.wetness.max`. */
+export function stepWetness(state: WetnessState, dt: number, isFiring: boolean, cap: number = BALANCE.wetness.max): WetnessState {
   const w = BALANCE.wetness;
   if (isFiring) {
     return { current: Math.max(0, state.current - w.drainPerSWhileFiring * dt), timeSinceStoppedFiringS: 0 };
@@ -33,7 +38,7 @@ export function stepWetness(state: WetnessState, dt: number, isFiring: boolean):
     return { current: state.current, timeSinceStoppedFiringS: timeSinceStopped };
   }
   return {
-    current: Math.min(w.max, state.current + w.refillPerSAfterDelay * dt),
+    current: Math.min(cap, state.current + w.refillPerSAfterDelay * dt),
     timeSinceStoppedFiringS: timeSinceStopped,
   };
 }
@@ -82,6 +87,7 @@ export function resolveInkPoolContact(
   wetness: WetnessState,
   brushX: number,
   brushZ: number,
+  cap: number = BALANCE.wetness.max,
 ): WetnessState {
   let next = wetness;
   for (let i = pool.activeCount - 1; i >= 0; i--) {
@@ -90,7 +96,7 @@ export function resolveInkPoolContact(
     if (Math.abs(p.x - brushX) <= BALANCE.wetness.poolHitRadiusU) {
       next = {
         ...next,
-        current: Math.min(BALANCE.wetness.max, next.current + BALANCE.wetness.poolRestoreAmount),
+        current: Math.min(cap, next.current + BALANCE.wetness.poolRestoreAmount),
       };
     }
     pool.release(p);

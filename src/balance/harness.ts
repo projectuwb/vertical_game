@@ -4,15 +4,18 @@
 //   npm run sim -- --sweep slipBudget=12,18,24,30 --runs 500
 //
 // Compiles via tsconfig.cli.json + plain `node` (see DECISIONS.md on why not `tsx`) and
-// imports only /sim, /core, and this package's own /balance modules — never /render,
-// /ui, /audio, or /platform — so it is exactly the simulation the real game runs, driven
-// by a scripted bot instead of a human.
+// imports only /sim, /core, /meta, and this package's own /balance modules — never
+// /render, /ui, /audio, or /platform — so it is exactly the simulation the real game
+// runs, driven by a scripted bot instead of a human. /meta is safe here: like /sim, it
+// never touches the DOM (see meta/profile.ts, meta/economy.ts, meta/upgrades.ts).
 
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { deriveSeed } from '../core/rng.js';
 import { FIXED_DT } from '../core/loop.js';
-import { computeGoldLeaf, createWorld, stepWorld } from '../sim/world.js';
+import { createWorld, stepWorld } from '../sim/world.js';
+import { INKSTONE_TRACK_IDS, type InkstoneTrackId } from '../sim/config.js';
+import { computeGoldLeaf } from '../meta/economy.js';
 import { ALL_BOT_STRATEGIES, createBotState, decideInput, type BotStrategy } from './bot.js';
 import { generateReport, type ReportedDeathCause, type RunResult } from './report.js';
 
@@ -63,8 +66,15 @@ function parseArgs(argv: readonly string[]): CliArgs {
   };
 }
 
-function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number): RunResult {
-  const world = createWorld(seed);
+/** `--upgrades N` (Task 4.2) applies level N uniformly across all eight Inkstone tracks
+ *  — a blunt but adequate stand-in for "a player who's bought roughly evenly" until a
+ *  real balance pass (Task 4.6) needs anything more targeted. */
+function uniformUpgradeLevels(level: number): Readonly<Record<InkstoneTrackId, number>> {
+  return Object.fromEntries(INKSTONE_TRACK_IDS.map((id) => [id, level])) as Record<InkstoneTrackId, number>;
+}
+
+function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number, upgradeLevel: number): RunResult {
+  const world = createWorld(seed, uniformUpgradeLevels(upgradeLevel));
   const botState = createBotState(seed);
   let lastGateResolvedAtS: number | null = null;
   const maxSteps = Math.ceil(maxPassageS / FIXED_DT);
@@ -88,7 +98,7 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number)
     passageLengthS: world.timeS,
     peakLine: world.peakLineCount,
     deathCause,
-    goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, world.sealsBroken),
+    goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, world.sealsBroken, upgradeLevel),
     distanceU: world.distanceU,
     blotKilled: world.blotKilled,
     diedWithin8sOfGate,
@@ -109,7 +119,7 @@ function main(): void {
   for (const strategy of strategies) {
     for (let i = 0; i < runsPerStrategy; i++) {
       const seed = deriveSeed(args.seed, `${strategy}:${i}`);
-      results.push(runOnePassage(seed, strategy, args.maxPassageS));
+      results.push(runOnePassage(seed, strategy, args.maxPassageS, args.upgrades));
     }
   }
 
