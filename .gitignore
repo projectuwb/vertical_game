@@ -1,6 +1,7 @@
 node_modules
 dist
 dist-cli
+public/icons
 *.local
 .DS_Store
 android/app/build

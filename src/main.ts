@@ -19,6 +19,7 @@ import {
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
 import { createStorage } from './platform/storage.js';
+import { createInstallPromptController, createWakeLockController, registerServiceWorker } from './platform/pwa.js';
 import { computeRowClassCounts, type LineState } from './sim/line.js';
 import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
@@ -144,6 +145,10 @@ function bootstrap(): void {
   const storage = createStorage();
   let profile: Profile = loadProfile(storage);
 
+  registerServiceWorker();
+  const installPrompt = createInstallPromptController(storage);
+  const wakeLock = createWakeLockController();
+
   // TECH_SPEC.md §4: every Passage records its seed for reproduction; Settings (Task
   // 4.3) exposes the most recent one. Decoupled from world.rng (see spawnDebugSlipRun
   // below) for the debug RNG stream.
@@ -198,6 +203,7 @@ function bootstrap(): void {
     deathAtRealMs = null;
     layers.requestRoadTrailReset();
     setAppState('playing');
+    wakeLock.acquire(); // TECH_SPEC.md §10: "wake lock requested during a Passage where supported"
   }
 
   function refreshInkstoneScreen(): void {
@@ -212,6 +218,7 @@ function bootstrap(): void {
   // (summary's Continue, Inkstone's Play) — called once, the instant a Passage's death
   // is first observed.
   function handlePassageDeath(): void {
+    wakeLock.release();
     deathAtRealMs = nowMs();
     const previousBestDistanceU = profile.bestDistanceU;
     const goldLeaf = computeGoldLeaf(
@@ -248,7 +255,10 @@ function bootstrap(): void {
       refreshSettingsScreen();
       setAppState('settings');
     },
+    onInstall: () => installPrompt.promptInstall(),
+    onDismissInstall: () => installPrompt.dismiss(),
   });
+  installPrompt.onAvailabilityChange((available) => titleScreen.setInstallPromptVisible(available));
   const summaryScreen = createSummaryScreen({
     onContinue: () => {
       refreshInkstoneScreen();
@@ -362,6 +372,14 @@ function bootstrap(): void {
   const loop = new FixedStepLoop(callbacks);
   attachVisibilityAutoPause(loop);
   runInBrowser(loop);
+
+  // The Wake Lock API releases itself automatically whenever the document goes hidden
+  // (the spec's own behaviour, not something this app requests) — re-acquiring here on
+  // return covers the common "switched app, came back mid-Passage" case that
+  // `attachVisibilityAutoPause` above already resumes the loop for.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && appState === 'playing') wakeLock.acquire();
+  });
 
   const debugRequested = new URLSearchParams(window.location.search).get('debug') === '1';
 

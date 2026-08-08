@@ -24,5 +24,5 @@
     "rootDir": "src",
     "types": ["node"]
   },
-  "include": ["src/core", "src/sim", "src/meta", "src/balance"]
+  "include": ["src/core", "src/sim", "src/meta", "src/balance", "src/build"]
 }

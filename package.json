@@ -5,8 +5,8 @@
   "type": "module",
   "description": "INKFALL — an on-rails ink-painting shooter.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "dev": "npm run generate-icons && vite",
+    "build": "npm run generate-icons && tsc -p tsconfig.json --noEmit && vite build && npm run generate-sw && npm run verify-offline",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
@@ -15,7 +15,10 @@
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
     "build:cli": "tsc -p tsconfig.cli.json",
     "sim": "npm run build:cli && node dist-cli/balance/harness.js",
-    "perf": "npm run build:cli && node dist-cli/balance/perf.js"
+    "perf": "npm run build:cli && node dist-cli/balance/perf.js",
+    "generate-icons": "npm run build:cli && node dist-cli/build/generateIcons.js",
+    "generate-sw": "npm run build:cli && node dist-cli/build/generateServiceWorker.js",
+    "verify-offline": "npm run build:cli && node dist-cli/build/verifyNoExternalFetch.js"
   },
   "dependencies": {},
   "devDependencies": {

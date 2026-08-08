@@ -11,6 +11,9 @@ export const STRINGS = {
     begin: 'Begin a Passage',
     settings: 'Settings',
     bestDistance: (u: number): string => `Best Passage: ${Math.floor(u)}u`,
+    installPrompt: 'Add INKFALL to your home screen for offline play.',
+    installAction: 'Install',
+    installDismiss: 'Not now',
   },
   summary: {
     heading: 'Passage ended',
