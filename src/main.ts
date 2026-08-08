@@ -1,12 +1,13 @@
-// Application bootstrap. Wires platform → sim → render. Fleshed out across Phase 1-2.
+// Application bootstrap. Wires platform → sim → render → ui. Fleshed out across
+// Phase 1-4.
 //
 // As of Task 2.7, the actual simulation wiring lives entirely in sim/world.ts
 // (createWorld/stepWorld) — this file just samples input, calls stepWorld once per fixed
-// step, and draws whatever World currently holds. Before 2.7 this file carried its own
-// inline copy of the same wiring (predating World's existence); that duplication is gone
-// now, which also means the real Spawn Director drives Blot waves/Slip runs/Gate
-// pairs/Sealstacks during ordinary play for the first time, not just via the debug keys
-// below.
+// step, and draws whatever World currently holds. As of Task 4.3, this file also owns
+// the top-level screen state machine (title/playing/summary/inkstone/settings,
+// ui/screens/run.ts's AppState) and the Profile persistence loop around it — the World
+// itself still knows nothing about any of that (TECH_SPEC.md §2: /sim never imports
+// /platform, /render, or /ui).
 
 import {
   attachVisibilityAutoPause,
@@ -17,6 +18,7 @@ import {
 } from './core/loop.js';
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
+import { createStorage } from './platform/storage.js';
 import { computeRowClassCounts, type LineState } from './sim/line.js';
 import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
@@ -26,6 +28,8 @@ import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
 import { createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
 import { computeGoldLeaf } from './meta/economy.js';
+import { loadProfile, saveProfile, recordRunResult, type Profile, type ProfileSettings } from './meta/profile.js';
+import { purchaseUpgrade } from './meta/upgrades.js';
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
 import { SMEAR_SEAL_DEFINITION } from './sim/seals/smear.js';
 import { PRESS_SEAL_DEFINITION } from './sim/seals/press.js';
@@ -40,8 +44,14 @@ import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
 import { drawSeal, isRoadMarkingsErased } from './render/seal.js';
 import { drawInkBleed, drawInkTrail } from './render/trail.js';
-import { drawDeathSummary, inkBleedFraction } from './render/hud.js';
+import { inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
+import { createTitleScreen } from './ui/screens/title.js';
+import { createSummaryScreen } from './ui/screens/summary.js';
+import { createInkstoneScreen } from './ui/screens/inkstone.js';
+import { createSettingsScreen } from './ui/screens/settings.js';
+import type { AppState } from './ui/screens/run.js';
+import { setScreenVisible } from './ui/widgets.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
 /** The Brush's fixed world-space depth: the road scrolls past it, not the other way
@@ -127,31 +137,131 @@ function bootstrap(): void {
   let lastCssHeight = initialMetrics.cssHeight;
   let lastDpr = initialMetrics.devicePixelRatio;
 
-  // TECH_SPEC.md §4/§9: every Passage records its seed for reproduction; the actual
-  // recording/display is Task 4.1/4.3 (persistence, screens) — for now each page load
-  // just gets a fresh one, same as before this refactor.
-  let world: World = createWorld(Date.now());
-  // Decoupled from world.rng on purpose (see spawnDebugSlipRun) — debug keys are dev
-  // tooling, not part of a replayable Passage.
+  const storage = createStorage();
+  let profile: Profile = loadProfile(storage);
+
+  // TECH_SPEC.md §4: every Passage records its seed for reproduction; Settings (Task
+  // 4.3) exposes the most recent one. Decoupled from world.rng (see spawnDebugSlipRun
+  // below) for the debug RNG stream.
+  let lastSeed: number | null = null;
+  let world: World = createWorld(Date.now(), profile.upgradeLevels);
   const debugRng = new RngRegistry(Date.now());
 
   // Real wall-clock time of death (Task 2.11) — world.timeS itself freezes the instant
   // isDead flips (stepWorld returns before advancing it), so the death sequence's own
-  // timing (ink bleed, summary reveal) has to come from somewhere that keeps ticking.
+  // timing (ink bleed) has to come from somewhere that keeps ticking.
   let deathAtRealMs: number | null = null;
 
-  function restart(): void {
-    world = createWorld(Date.now());
+  let appState: AppState = 'title';
+
+  function setAppState(next: AppState): void {
+    appState = next;
+    setScreenVisible(titleScreen.root, next === 'title');
+    setScreenVisible(summaryScreen.root, next === 'summary');
+    setScreenVisible(inkstoneScreen.root, next === 'inkstone');
+    setScreenVisible(settingsScreen.root, next === 'settings');
+  }
+
+  function beginPassage(): void {
+    const seed = Date.now();
+    lastSeed = seed;
+    world = createWorld(seed, profile.upgradeLevels);
     deathAtRealMs = null;
     layers.requestRoadTrailReset();
+    setAppState('playing');
   }
+
+  function refreshInkstoneScreen(): void {
+    inkstoneScreen.update(profile);
+  }
+
+  function refreshSettingsScreen(): void {
+    settingsScreen.update({ profile, isPersistent: storage.isPersistent, lastSeed });
+  }
+
+  // GAME_DESIGN.md §10: "Death → run summary → Inkstone → run again," exactly two taps
+  // (summary's Continue, Inkstone's Play) — called once, the instant a Passage's death
+  // is first observed.
+  function handlePassageDeath(): void {
+    deathAtRealMs = nowMs();
+    const previousBestDistanceU = profile.bestDistanceU;
+    const goldLeaf = computeGoldLeaf(
+      world.blotKilled,
+      world.distanceU,
+      world.sealsBroken,
+      profile.upgradeLevels.leaf,
+    );
+    profile = recordRunResult(profile, {
+      seed: lastSeed ?? 0,
+      distanceU: world.distanceU,
+      peakLine: world.peakLineCount,
+      sealsBroken: world.sealsBroken,
+      goldLeafEarned: goldLeaf,
+      timestampMs: Date.now(),
+    });
+    saveProfile(storage, profile);
+
+    summaryScreen.show({
+      distanceU: world.distanceU,
+      peakLine: world.peakLineCount,
+      blotKilled: world.blotKilled,
+      sealsBroken: world.sealsBroken,
+      goldLeaf,
+      deathCause: world.deathCause ?? 'blot',
+      previousBestDistanceU,
+    });
+    setAppState('summary');
+  }
+
+  const titleScreen = createTitleScreen({
+    onBegin: beginPassage,
+    onSettings: () => {
+      refreshSettingsScreen();
+      setAppState('settings');
+    },
+  });
+  const summaryScreen = createSummaryScreen({
+    onContinue: () => {
+      refreshInkstoneScreen();
+      setAppState('inkstone');
+    },
+  });
+  const inkstoneScreen = createInkstoneScreen({
+    onPlay: beginPassage,
+    onPurchase: (track) => {
+      profile = purchaseUpgrade(profile, track) ?? profile;
+      saveProfile(storage, profile);
+      refreshInkstoneScreen();
+    },
+  });
+  const settingsScreen = createSettingsScreen({
+    // Settings is only ever reached from Title (see ui/screens/run.ts's own note on
+    // why the Inkstone/summary flow doesn't route through it) — "Back" always returns
+    // there.
+    onBack: () => setAppState('title'),
+    onSettingChange: (settings: ProfileSettings) => {
+      profile = { ...profile, settings };
+      saveProfile(storage, profile);
+      refreshSettingsScreen(); // keeps the live export blob in sync with the toggle just flipped
+    },
+    onImport: (imported: Profile) => {
+      profile = imported;
+      saveProfile(storage, profile);
+      refreshSettingsScreen();
+    },
+  });
+
+  app.append(titleScreen.root, summaryScreen.root, inkstoneScreen.root, settingsScreen.root);
+  titleScreen.update(profile);
+  setAppState('title');
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
+      if (appState !== 'playing') return;
       const frame = input.sample(dtFixed);
       stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
       if (world.isDead && deathAtRealMs === null) {
-        deathAtRealMs = nowMs();
+        handlePassageDeath();
       }
     },
     render: (_alpha: number): void => {
@@ -166,6 +276,12 @@ function bootstrap(): void {
         lastCssHeight = metrics.cssHeight;
         lastDpr = metrics.devicePixelRatio;
       }
+
+      // The game canvas only matters while actually playing, or frozen behind the
+      // translucent summary screen right after death — Title/Inkstone/Settings are
+      // fully opaque DOM overlays, so there's nothing to gain by keeping the canvas
+      // scene current underneath them.
+      if (appState !== 'playing' && appState !== 'summary') return;
 
       const params = computeProjectionParams(metrics.cssWidth, metrics.cssHeight);
       const brushX = clamp(world.brushFollower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
@@ -203,27 +319,6 @@ function bootstrap(): void {
       drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);
       drawBrush(layers.actorsCtx, params, brushX, BRUSH_Z, world.wetness, world.flourish, world.timeS);
 
-      if (world.isDead) {
-        drawDeathSummary(
-          layers.hudCtx,
-          metrics.cssWidth,
-          metrics.cssHeight,
-          {
-            distanceU: world.distanceU,
-            peakLine: world.peakLineCount,
-            blotKilled: world.blotKilled,
-            sealsBroken: world.sealsBroken,
-            goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, world.sealsBroken),
-            deathCause: world.deathCause ?? 'blot',
-          },
-          deathElapsedS,
-        );
-        layers.markHudDirty();
-      } else if (layers.isHudDirty) {
-        layers.hudCtx.clearRect(0, 0, metrics.cssWidth, metrics.cssHeight);
-        layers.markHudClean();
-      }
-
       layers.compositeInto(viewport.ctx);
     },
   };
@@ -233,22 +328,6 @@ function bootstrap(): void {
   runInBrowser(loop);
 
   const debugRequested = new URLSearchParams(window.location.search).get('debug') === '1';
-
-  // GAME_DESIGN.md §10: "from death to next Passage in two taps and under 3 seconds" —
-  // any pointer press restarts once dead, with no confirmation step; the death-summary
-  // reveal (hud.ts) never blocks this, so a player who taps immediately skips straight
-  // past the animation into a new Passage. Keyboard restart is desktop-only and skipped
-  // under ?debug=1, where a stray keypress meant for a debug key would otherwise
-  // immediately undo whatever debug state was being tested — the dedicated KeyR handler
-  // below covers restart for debug sessions instead.
-  viewport.canvas.addEventListener('pointerdown', () => {
-    if (world.isDead) restart();
-  });
-  if (!debugRequested) {
-    document.addEventListener('keydown', () => {
-      if (world.isDead) restart();
-    });
-  }
 
   if (debugRequested) {
     mountDebugOverlay(loop, app);
@@ -289,7 +368,9 @@ function bootstrap(): void {
         spawnSealstack(world.sealstackPool, debugRng.chance('cosmetic', 0.5) ? 'left' : 'right', 40);
       }
       if (e.code === 'KeyR') {
-        restart();
+        // Debug-only fast restart: straight back into a fresh Passage, skipping the
+        // summary/Inkstone stop the real death flow always takes.
+        beginPassage();
       }
       if (e.code === 'KeyJ') {
         world.line = buildDebugPureLine('hane', BALANCE.phrase.rowSize);
@@ -316,6 +397,11 @@ function bootstrap(): void {
       if (e.code === 'KeyV') {
         // Task 3.4's debug hook: starts The Blank at sealIndex 0.
         startSealEncounter(world, 0, BLANK_SEAL_DEFINITION);
+      }
+      if (e.code === 'KeyT') {
+        // Task 4.3's debug hook: jumps straight to the title screen from anywhere.
+        titleScreen.update(profile);
+        setAppState('title');
       }
     });
   }

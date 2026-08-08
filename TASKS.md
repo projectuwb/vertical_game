@@ -41,7 +41,7 @@ Phases 1–5 are the shippable game. **Phase 6 is not live until the user says s
 
 - [x] **4.1 Profile and persistence.** Schema, migrations, safe storage wrapper, export/import. *Done when: migration tests pass and the game runs correctly with storage throwing on every call.*
 - [x] **4.2 Economy.** Gold Leaf formula, all eight Inkstone tracks with cost curves, application of every effect into the sim. *Done when: each upgrade's effect is unit-tested end to end, not just stored.*
-- [ ] **4.3 Screens.** Title, run summary, Inkstone, settings — per `GAME_DESIGN.md` §10 and §12, keyboard-navigable, no confirmation dialogs. *Done when: every screen is finished, responsive, and reachable; no placeholder text anywhere.*
+- [x] **4.3 Screens.** Title, run summary, Inkstone, settings — per `GAME_DESIGN.md` §10 and §12, keyboard-navigable, no confirmation dialogs. *Done when: every screen is finished, responsive, and reachable; no placeholder text anywhere.*
 - [ ] **4.4 Audio.** WebAudio synthesis for all SFX and the generative music per §12, with a mixer, mute persistence, and a hard rule that audio never blocks the loop. *Done when: no audio file exists in the repo and every event in §12 has a distinct sound.*
 - [ ] **4.5 First-run teaching.** The scripted opening 20 seconds per §13. *Done when: a fresh profile produces exactly that sequence and no text panel appears.*
 - [ ] **4.6 Balance pass.** Sweep the director and Slip budget until every target in §11 passes, especially the greedy-slips vs greedy-kill row. Commit the report. *Done when: `BALANCE_REPORT.md` shows all rows passing.*
