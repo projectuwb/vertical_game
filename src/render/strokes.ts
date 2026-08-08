@@ -10,6 +10,7 @@ import { BALANCE } from '../sim/config.js';
 import { classifyForRender, computeFormationSlot, type LineState } from '../sim/line.js';
 import type { Pool } from '../core/pool.js';
 import type { Projectile } from '../sim/projectiles.js';
+import type { JoiningRecruit, Slip } from '../sim/slips.js';
 import type { StrokeClass } from '../sim/stroke.js';
 
 const CLASS_COLOR: Record<StrokeClass, string> = {
@@ -148,7 +149,13 @@ function drawDensityBlock(
   }
 
   const dominant = dominantClass(counts);
-  ctx.fillStyle = CLASS_COLOR[dominant];
+  fillQuad(ctx, corners, CLASS_COLOR[dominant]);
+
+  drawStipple(ctx, corners, counts, dominant);
+}
+
+function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): void {
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(corners[0].screenX, corners[0].screenY);
   ctx.lineTo(corners[1].screenX, corners[1].screenY);
@@ -156,8 +163,6 @@ function drawDensityBlock(
   ctx.lineTo(corners[3].screenX, corners[3].screenY);
   ctx.closePath();
   ctx.fill();
-
-  drawStipple(ctx, corners, counts, dominant);
 }
 
 /** Ties broken hane > tome > harai — arbitrary but stable, so the block doesn't flicker
@@ -264,5 +269,54 @@ export function drawProjectiles(
       ctx.arc(ground.screenX, ground.screenY, pxSize * 0.7, 0, Math.PI * 2);
       ctx.fill();
     }
+  });
+}
+
+// Render-only cosmetic constants for Slips — not gameplay balance.
+const SLIP_HEIGHT_U = 0.55;
+const SLIP_PLUS_ONE_WIDTH_U = 0.5;
+const SLIP_PLUS_FIVE_WIDTH_U = 0.9;
+const SLIP_THICKNESS_U = 0.08;
+
+/**
+ * Paper slips staked along the verge (GAME_DESIGN.md §7.1): class-tinted, growing wider
+ * with value — +1 modest, +5 larger, the +25 Banner spanning a third of the lane.
+ */
+export function drawSlips(ctx: CanvasRenderingContext2D, params: ProjectionParams, pool: Pool<Slip>): void {
+  pool.forEachActive((s) => {
+    const widthU =
+      s.kind === 'plusOne'
+        ? SLIP_PLUS_ONE_WIDTH_U
+        : s.kind === 'plusFive'
+          ? SLIP_PLUS_FIVE_WIDTH_U
+          : BALANCE.lane.width * BALANCE.slips.plusTwentyFive.laneSpanFraction;
+    const halfWidth = widthU / 2;
+
+    const corners: Quad = [
+      project(s.x - halfWidth, 0, s.z - SLIP_THICKNESS_U, params),
+      project(s.x + halfWidth, 0, s.z - SLIP_THICKNESS_U, params),
+      project(s.x + halfWidth, SLIP_HEIGHT_U, s.z, params),
+      project(s.x - halfWidth, SLIP_HEIGHT_U, s.z, params),
+    ];
+    fillQuad(ctx, corners, CLASS_COLOR[s.class]);
+  });
+}
+
+const RECRUIT_RADIUS_U = 0.14;
+
+/** The runner-joins-the-back animation (GAME_DESIGN.md §7.1): a small mark travelling
+ *  from the Slip it came from to its new place in the Line. */
+export function drawJoiningRecruits(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  pool: Pool<JoiningRecruit>,
+): void {
+  pool.forEachActive((r) => {
+    const ground = project(r.x, 0.2, r.z, params);
+    const pxRadius = Math.max(1.5, RECRUIT_RADIUS_U * ground.scale * params.unit);
+    ctx.fillStyle = CLASS_COLOR[r.class];
+    ctx.beginPath();
+    ctx.arc(ground.screenX, ground.screenY, pxRadius, 0, Math.PI * 2);
+    ctx.fill();
   });
 }

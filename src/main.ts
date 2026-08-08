@@ -10,6 +10,8 @@ import {
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
 import {
+  addStroke,
+  computeFormationSlot,
   computeFrontRowSourcePositions,
   computeRowClassCounts,
   createLine,
@@ -34,11 +36,25 @@ import {
   spawnBlot,
   updateBlotMotion,
 } from './sim/blot.js';
-import { resolveProjectileBlotCollisions } from './sim/collision.js';
+import {
+  createJoiningRecruitPool,
+  createSlipPool,
+  pickSlipClass,
+  resolveSlipDeaths,
+  spawnSlip,
+  updateJoiningRecruits,
+  updateSlipMotion,
+  type SlipKind,
+} from './sim/slips.js';
+import {
+  resolveProjectileBlotCollisions,
+  resolveProjectileSlipCollisions,
+} from './sim/collision.js';
+import { RngRegistry } from './core/rng.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
 import { drawRoad, drawSkyWater } from './render/road.js';
-import { drawLine, drawProjectiles } from './render/strokes.js';
+import { drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { OffscreenLayers } from './render/layers.js';
 import { PALETTE } from './render/palette.js';
@@ -79,6 +95,29 @@ function spawnDebugBlotWave(pool: ReturnType<typeof createBlotPool>, count: numb
   }
 }
 
+/** Task 2.5's debug control: a run of Slips staked ahead, class chosen the same way the
+ *  real Spawn Director (Task 2.7) will — least-held-class-weighted via the seeded
+ *  'slips' RNG concern. */
+function spawnDebugSlipRun(
+  pool: ReturnType<typeof createSlipPool>,
+  kind: SlipKind,
+  count: number,
+  line: LineState,
+  rng: RngRegistry,
+): void {
+  const { front, back } = computeRowClassCounts(line);
+  const counts: Record<StrokeClass, number> = {
+    hane: front.hane + back.hane,
+    tome: front.tome + back.tome,
+    harai: front.harai + back.harai,
+  };
+  const cls = pickSlipClass(counts, rng);
+  for (let i = 0; i < count; i++) {
+    const x = (i - (count - 1) / 2) * 0.7;
+    spawnSlip(pool, kind, cls, x, 30);
+  }
+}
+
 function bootstrap(): void {
   const app = document.getElementById('app');
   if (app === null) {
@@ -106,6 +145,9 @@ function bootstrap(): void {
   const projectilePool = createProjectilePool();
   const firingAccumulators = createFiringAccumulators();
   const blotPool = createBlotPool();
+  const slipPool = createSlipPool();
+  const joiningRecruitPool = createJoiningRecruitPool();
+  const rng = new RngRegistry(Date.now());
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
@@ -128,6 +170,17 @@ function bootstrap(): void {
       const strokesLost = lobsLanded + strokesLostToContact;
       if (strokesLost > 0) {
         line = removeStrokesFromFront(line, strokesLost);
+      }
+
+      updateSlipMotion(slipPool, dtFixed);
+      resolveProjectileSlipCollisions(projectilePool, slipPool);
+      const backSlot = computeFormationSlot(line.strokes.length);
+      resolveSlipDeaths(slipPool, joiningRecruitPool, {
+        x: brushX + backSlot.lateralOffset,
+        z: BRUSH_Z + backSlot.depthOffset,
+      });
+      for (const cls of updateJoiningRecruits(joiningRecruitPool, dtFixed)) {
+        line = addStroke(line, cls);
       }
     },
     render: (_alpha: number): void => {
@@ -155,7 +208,9 @@ function bootstrap(): void {
       layers.clearActors();
       const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
       drawBlot(layers.actorsCtx, params, blotPool, BRUSH_Z);
+      drawSlips(layers.actorsCtx, params, slipPool);
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
+      drawJoiningRecruits(layers.actorsCtx, params, joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, projectilePool);
 
       const marker = project(brushX, BRUSH_MARKER_RADIUS_U, BRUSH_MARKER_Z, params);
@@ -203,6 +258,12 @@ function bootstrap(): void {
       if (waveSize !== undefined) {
         blotPool.releaseAll();
         spawnDebugBlotWave(blotPool, waveSize);
+      }
+      if (e.code === 'Digit9') {
+        spawnDebugSlipRun(slipPool, 'plusOne', 8, line, rng);
+      }
+      if (e.code === 'Digit0') {
+        spawnDebugSlipRun(slipPool, 'plusTwentyFive', 1, line, rng);
       }
     });
   }

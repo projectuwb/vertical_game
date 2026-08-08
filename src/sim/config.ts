@@ -127,11 +127,16 @@ const balance = {
     segmentLengthU: 120,
   },
   slips: {
-    plusOne: { hp: 1, runMin: 4, runMax: 14 },
-    plusFive: { hp: 6 },
-    plusTwentyFive: { hp: 40, laneSpanFraction: 1 / 3 },
+    plusOne: { hp: 1, runMin: 4, runMax: 14, recruitCount: 1 },
+    plusFive: { hp: 6, recruitCount: 5 },
+    plusTwentyFive: { hp: 40, laneSpanFraction: 1 / 3, recruitCount: 25 },
     /** The class currently least-held is this much more likely to appear. */
     leastHeldWeightMultiplier: 1.5,
+    // Not given a number in GAME_DESIGN.md ("the runner-joins-the-back animation") —
+    // 0.6s reads clearly as a run without feeling laggy, comfortably under the Task
+    // 2.5 acceptance bar of a Stroke landing within 1.2s of the kill. Logged in
+    // DECISIONS.md.
+    recruitTravelDurationS: 0.6,
   },
   gates: {
     pairIntervalU: 220,
@@ -262,6 +267,11 @@ const balance = {
     strokeCapacity: 999,
     particleCapacity: 600,
     floatingNumberCapacity: 64,
+    // Not named in TECH_SPEC.md §5's pool list (it predates Slips/recruits existing as
+    // pooled entities) — sized generously above the largest single Slip run (14) and a
+    // busy moment of in-flight recruits, with headroom to spare.
+    slipCapacity: 64,
+    joiningRecruitCapacity: 64,
   },
 
   // Projectile-vs-Blot hit radius: not given a number anywhere in either spec (neither
