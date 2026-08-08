@@ -164,7 +164,7 @@ const balance = {
     missDespawnMarginU: 2,
   },
   gates: {
-    pairIntervalU: 220,
+    pairIntervalU: 800,
     sealed: { goodChance: 0.6, badChance: 0.4 },
     arithmetic: { mul2: 2, mul3: 3, addTwelve: 12, addTwentyFive: 25, subTen: -10, divTwo: 0.5 },
     temper: {
@@ -311,29 +311,29 @@ const balance = {
 
   // §9 The Spawn Director
   director: {
-    pressureTimeDivisorS: 38,
-    pressureLineLogMultiplier: 0.55,
+    pressureTimeDivisorS: 26,
+    pressureLineLogMultiplier: 0.65,
     waveIntervalMinS: 2.4,
     waveIntervalBaseS: 7.5,
     waveIntervalTimeDivisorS: 32,
     waveSizeBase: 4,
-    waveSizeMultiplier: 3.2,
+    waveSizeMultiplier: 4.1,
     waveSizeCap: 240,
     composition: {
       pressureLowBand: 3,
       pressureMidBand: 6,
       pressureHighBand: 10,
       runnerChance: 0.2,
-      crustChance: 0.1,
+      crustChance: 0.105,
       blotterChance: 0.12,
       splitterChanceHigh: 0.15,
       drifterChanceHigh: 0.15,
-      crustChanceHigh: 0.18,
+      crustChanceHigh: 0.16,
     },
     slipBudget: {
-      base: 18,
-      pressureMultiplier: 6,
-      perU: 100,
+      base: 12,
+      pressureMultiplier: 4,
+      perU: 210,
     },
     mercy: {
       lineThreshold: 2,
@@ -342,9 +342,9 @@ const balance = {
       slipDensityBonus: 0.6,
     },
     antiSnowball: {
-      lineThreshold: 400,
-      waveSizeMult: 1.35,
-      crustShareBonus: 0.08,
+      lineThreshold: 16,
+      waveSizeMult: 4.5,
+      crustShareBonus: 0,
     },
     // Not given a number anywhere: how far ahead of the Brush new road content first
     // appears. 45u gives just over 2s of warning at base forward speed (22u/s) —
@@ -366,17 +366,17 @@ const balance = {
 
   // §10 Structure — arcade + meta
   economy: {
-    goldLeafPerBlotKilled: 1,
-    goldLeafPerDistanceU: 8,
-    goldLeafPerSealBroken: 120,
+    goldLeafPerBlotKilled: 0.0022,
+    goldLeafPerDistanceU: 1400,
+    goldLeafPerSealBroken: 5,
   },
   inkstone: {
     levelsPerTrack: 10,
-    costGrowthPerLevel: 1.38,
+    costGrowthPerLevel: 1.47,
     openingStroke: { strokesPerLevel: 1, baseCost: 40 },
-    grind: { damagePerLevel: 0.04, baseCost: 30 },
-    nib: { fireRatePerLevel: 0.03, baseCost: 30 },
-    well: { wetnessCapPerLevel: 8, baseCost: 25 },
+    grind: { damagePerLevel: 0.1, baseCost: 30 },
+    nib: { fireRatePerLevel: 0.074, baseCost: 30 },
+    well: { wetnessCapPerLevel: 8, baseCost: 2 },
     leaf: { goldLeafPerLevel: 0.05, baseCost: 35 },
     reach: { rangePerLevel: 0.04, slipDamagePerLevel: 0.02, baseCost: 25 },
     flourishStudy: { cooldownReductionPerLevelS: 0.4, cooldownFloorS: 2.0, baseCost: 45 },

@@ -25,6 +25,16 @@ export interface RunResult {
    *  any other way. */
   readonly sealReached: boolean;
   readonly sealBroken: boolean;
+  /** Only meaningful when `deathCause === 'blot'` — did a Crust land its contact on the
+   *  exact step that ended the run? Task 4.6's "Deaths from Crust" §11 target. */
+  readonly deathCrustInvolved: boolean;
+}
+
+export interface MetaProgressionSummary {
+  readonly runsToFirstUpgrade: number | null;
+  readonly runsToLevelTarget: number | null;
+  readonly levelTarget: number;
+  readonly maxPassages: number;
 }
 
 export interface ReportMeta {
@@ -34,6 +44,7 @@ export interface ReportMeta {
   readonly maxPassageSCap: number;
   readonly timedOutCount: number;
   readonly sweepNote: string | null;
+  readonly metaProgression: MetaProgressionSummary;
 }
 
 function median(values: readonly number[]): number {
@@ -110,6 +121,7 @@ function evaluateTargets(
   results: readonly RunResult[],
   strategyResults: Map<BotStrategy, RunResult[]>,
   upgradeLevel: number,
+  metaProgression: MetaProgressionSummary,
 ): TargetRow[] {
   const t = BALANCE.balanceTargets;
   const rows: TargetRow[] = [];
@@ -148,22 +160,27 @@ function evaluateTargets(
     );
   }
 
-  if (strategyResults.size >= 2) {
-    const medians = [...strategyResults.entries()].map(([strategy, rs]) => ({
-      strategy,
-      medianGoldLeaf: median(rs.map((r) => r.goldLeaf)),
-    }));
-    const values = medians.map((m) => m.medianGoldLeaf);
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
+  // GAME_DESIGN.md §11 names exactly these two strategies and exactly "median distance"
+  // — not a Gold-Leaf comparison across every strategy in the batch. Gold Leaf was the
+  // original stand-in (Task 2.7, before Task 4.2's Inkstone/economy existed to make
+  // "distance" itself meaningful to compare), but it reads as either-or noise once short
+  // runs routinely earn 0 Leaf (Task 4.6's stingier economy) — distanceU is what the
+  // design doc actually asks for, and every RunResult has always carried it.
+  const greedySlips = strategyResults.get('greedy-slips') ?? [];
+  const greedyKill = strategyResults.get('greedy-kill') ?? [];
+  if (greedySlips.length > 0 && greedyKill.length > 0) {
+    const medianSlipsDistance = median(greedySlips.map((r) => r.distanceU));
+    const medianKillDistance = median(greedyKill.map((r) => r.distanceU));
+    const lo = Math.min(medianSlipsDistance, medianKillDistance);
+    const hi = Math.max(medianSlipsDistance, medianKillDistance);
     const dominance = lo === 0 ? Infinity : (hi - lo) / lo;
     rows.push({
-      name: 'Strategy dominance (spread in median Gold Leaf across strategies)',
+      name: 'Strategy dominance (spread in median distance, greedy-slips vs greedy-kill)',
       status: dominance <= t.strategyDominanceMaxFraction ? 'PASS' : 'FAIL',
-      detail: `${formatNum(dominance * 100, 1)}% spread vs target ≤${formatNum(t.strategyDominanceMaxFraction * 100, 0)}% (${medians.map((m) => `${m.strategy}=${formatNum(m.medianGoldLeaf, 0)}`).join(', ')})`,
+      detail: `${formatNum(dominance * 100, 1)}% spread vs target ≤${formatNum(t.strategyDominanceMaxFraction * 100, 0)}% (greedy-slips=${formatNum(medianSlipsDistance, 0)}, greedy-kill=${formatNum(medianKillDistance, 0)})`,
     });
   } else {
-    rows.push({ name: 'Strategy dominance', status: 'N/A', detail: 'needs 2+ strategies in one batch (run without --strategy)' });
+    rows.push({ name: 'Strategy dominance', status: 'N/A', detail: 'needs both greedy-slips and greedy-kill runs in one batch (run without --strategy)' });
   }
 
   if (isZeroUpgrades) {
@@ -215,19 +232,50 @@ function evaluateTargets(
     );
   }
 
-  rows.push(
-    {
+  if (metaProgression.runsToFirstUpgrade === null) {
+    rows.push({
       name: 'Runs to afford first upgrade',
-      status: 'N/A',
-      detail: 'needs a multi-Passage meta-progression simulation (Gold Leaf carried and spent across runs) — this harness only simulates one Passage at a time; Task 4.6\'s balance pass is where that harness extension belongs',
-    },
-    {
-      name: 'Runs to Inkstone level 40',
-      status: 'N/A',
-      detail: 'same as above — a single-Passage harness has nothing to measure this against',
-    },
-    { name: 'Deaths from Crust', status: 'N/A', detail: 'per-Blot-class death attribution is not tracked yet' },
-  );
+      status: 'FAIL',
+      detail: `never happened within ${metaProgression.maxPassages} simulated Passages`,
+    });
+  } else {
+    const runs = metaProgression.runsToFirstUpgrade;
+    rows.push({
+      name: 'Runs to afford first upgrade',
+      status: runs >= t.runsToAffordFirstUpgrade.min && runs <= t.runsToAffordFirstUpgrade.max ? 'PASS' : 'FAIL',
+      detail: `${runs} vs target ${t.runsToAffordFirstUpgrade.min}-${t.runsToAffordFirstUpgrade.max} (mixed bot, greedy cheapest-first spend, meta-progression sim)`,
+    });
+  }
+
+  if (metaProgression.runsToLevelTarget === null) {
+    rows.push({
+      name: `Runs to Inkstone level ${metaProgression.levelTarget}`,
+      status: 'FAIL',
+      detail: `never happened within ${metaProgression.maxPassages} simulated Passages`,
+    });
+  } else {
+    const runs = metaProgression.runsToLevelTarget;
+    rows.push({
+      name: `Runs to Inkstone level ${metaProgression.levelTarget}`,
+      status: runs >= t.runsToUpgradeLevel40.min && runs <= t.runsToUpgradeLevel40.max ? 'PASS' : 'FAIL',
+      detail: `${runs} vs target ${t.runsToUpgradeLevel40.min}-${t.runsToUpgradeLevel40.max} (mixed bot, greedy cheapest-first spend, meta-progression sim)`,
+    });
+  }
+
+  const blotDeaths = results.filter((r) => r.deathCause === 'blot');
+  if (blotDeaths.length > 0) {
+    const crustFraction = blotDeaths.filter((r) => r.deathCrustInvolved).length / blotDeaths.length;
+    rows.push({
+      name: 'Deaths from Crust (share of blot-caused deaths)',
+      status:
+        crustFraction >= t.deathsFromCrustFraction.min && crustFraction <= t.deathsFromCrustFraction.max
+          ? 'PASS'
+          : 'FAIL',
+      detail: `${formatNum(crustFraction * 100, 1)}% vs target ${formatNum(t.deathsFromCrustFraction.min * 100, 0)}-${formatNum(t.deathsFromCrustFraction.max * 100, 0)}% (${blotDeaths.length} blot-caused deaths in this batch)`,
+    });
+  } else {
+    rows.push({ name: 'Deaths from Crust', status: 'N/A', detail: 'no blot-caused deaths in this batch' });
+  }
 
   return rows;
 }
@@ -300,7 +348,7 @@ export function generateReport(results: readonly RunResult[], meta: ReportMeta):
   lines.push('');
   lines.push('| Target | Status | Detail |');
   lines.push('|---|---|---|');
-  for (const row of evaluateTargets(results, strategyResults, meta.upgrades)) {
+  for (const row of evaluateTargets(results, strategyResults, meta.upgrades, meta.metaProgression)) {
     lines.push(`| ${row.name} | ${row.status} | ${row.detail} |`);
   }
   lines.push('');

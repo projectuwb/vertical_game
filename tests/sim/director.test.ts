@@ -15,10 +15,15 @@ import {
 } from '../../src/sim/director.js';
 
 describe('computePressure', () => {
-  it('matches GAME_DESIGN.md §9 exactly: 1 + t/38 + log2(max(N,1)) * 0.55', () => {
+  // GAME_DESIGN.md §9's exact formula is `1 + t/38 + log2(max(N,1)) * 0.55` — Task 4.6's
+  // balance pass retunes `pressureTimeDivisorS`/`pressureLineLogMultiplier` away from
+  // those starting values (line 3's own "starting value... may be tuned" carve-out), so
+  // this test checks the *formula's shape* against BALANCE's live tunables rather than
+  // pinning the original literals.
+  it('matches the §9 formula shape: 1 + t/pressureTimeDivisorS + log2(max(N,1)) * pressureLineLogMultiplier', () => {
     const d = BALANCE.director;
     expect(computePressure(0, 1)).toBeCloseTo(1, 9); // log2(1) = 0
-    expect(computePressure(38, 1)).toBeCloseTo(2, 9);
+    expect(computePressure(d.pressureTimeDivisorS, 1)).toBeCloseTo(2, 9); // t/divisor = 1
     expect(computePressure(0, 8)).toBeCloseTo(1 + Math.log2(8) * d.pressureLineLogMultiplier, 9);
   });
 
@@ -39,17 +44,22 @@ describe('computeWaveIntervalS', () => {
 });
 
 describe('computeWaveSize', () => {
-  it('matches round(4 + P * 3.2) under the cap', () => {
-    expect(computeWaveSize(1, 1)).toBe(Math.round(4 + 1 * 3.2));
+  // §9's exact formula is `round(4 + P * 3.2)` — waveSizeBase/waveSizeMultiplier are
+  // both Task-4.6-tunable (see computePressure's comment above), so this checks the
+  // formula shape against BALANCE's live values rather than the original literals.
+  it('matches round(waveSizeBase + P * waveSizeMultiplier) under the cap', () => {
+    const d = BALANCE.director;
+    expect(computeWaveSize(1, 1)).toBe(Math.round(d.waveSizeBase + 1 * d.waveSizeMultiplier));
   });
 
   it('caps at 240', () => {
     expect(computeWaveSize(1000, 1)).toBe(BALANCE.director.waveSizeCap);
   });
 
-  it('anti-snowball scales wave size up when N > 400', () => {
-    const normal = computeWaveSize(5, 100);
-    const snowballed = computeWaveSize(5, 401);
+  it('anti-snowball scales wave size up once N crosses lineThreshold', () => {
+    const threshold = BALANCE.director.antiSnowball.lineThreshold;
+    const normal = computeWaveSize(5, threshold - 1);
+    const snowballed = computeWaveSize(5, threshold + 1);
     expect(snowballed).toBeGreaterThan(normal);
   });
 });

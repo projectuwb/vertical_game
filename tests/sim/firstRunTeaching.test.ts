@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/sim/config.js';
 import { createWorld, stepWorld, type WorldInput } from '../../src/sim/world.js';
+import { setLineCount } from '../../src/sim/line.js';
 
 const DT = 1 / 60;
 const NO_INPUT: WorldInput = { lateralDelta: 0, holding: false };
@@ -89,8 +90,19 @@ describe('First-run teaching (GAME_DESIGN.md §13)', () => {
     const wavesAtWindowEnd = world.blotPool.activeCount;
 
     // Run well past the window — a real Passage keeps producing content indefinitely;
-    // teaching suppressing it forever would be a stuck-Director bug, not a feature.
+    // teaching suppressing it forever would be a stuck-Director bug, not a feature. This
+    // check is about the Director mechanism, not survivability: NO_INPUT never dodges or
+    // repositions, and Task 4.6's balance pass deliberately raised early-wave lethality
+    // to hit the §11 length/peak-Line targets, so a passive Line can now die to the very
+    // wave already on screen at window-end before 30s of "is the Director still
+    // producing content" gets to run at all. Flooring the Line keeps the Passage alive
+    // long enough to observe that, exactly like sealCadence.test.ts's `stepSurvivably`.
+    const CONTENT_CHECK_FLOOR_STROKES = 300;
     for (let i = 0; i < stepsFor(30); i++) {
+      if (world.line.strokes.length < CONTENT_CHECK_FLOOR_STROKES) {
+        world.line = setLineCount(world.line, CONTENT_CHECK_FLOOR_STROKES, 'hane');
+        world.isDead = false;
+      }
       stepWorld(world, DT, NO_INPUT);
     }
 

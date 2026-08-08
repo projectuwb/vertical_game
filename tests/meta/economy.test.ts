@@ -3,10 +3,15 @@ import { BALANCE } from '../../src/sim/config.js';
 import { computeGoldLeaf } from '../../src/meta/economy.js';
 
 describe('computeGoldLeaf', () => {
-  it('matches GAME_DESIGN.md §10: blotKilled + floor(distance/8) + sealsBroken*120', () => {
+  // GAME_DESIGN.md §10's exact formula is `blotKilled x 1 + floor(distance/8) +
+  // sealsBroken x 120` — the three coefficients are Task-4.6-tunable (same "starting
+  // value... may be tuned" carve-out as the director numbers), so this checks the
+  // formula shape (including the function's own documented final rounding) against
+  // BALANCE's live values rather than the original literals.
+  it('matches the §10 formula shape: blotKilled x goldLeafPerBlotKilled + floor(distance/goldLeafPerDistanceU) + sealsBroken x goldLeafPerSealBroken, rounded', () => {
     const e = BALANCE.economy;
     expect(computeGoldLeaf(10, 800, 1)).toBe(
-      10 * e.goldLeafPerBlotKilled + Math.floor(800 / e.goldLeafPerDistanceU) + 1 * e.goldLeafPerSealBroken,
+      Math.round(10 * e.goldLeafPerBlotKilled + Math.floor(800 / e.goldLeafPerDistanceU) + 1 * e.goldLeafPerSealBroken),
     );
   });
 

@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/sim/config.js';
+import { computeUpgradeCost } from '../../src/meta/upgrades.js';
 
 describe('BALANCE', () => {
   it('is deeply frozen', () => {
@@ -39,8 +40,11 @@ describe('BALANCE', () => {
     expect(BALANCE.seals.hpGrowthPerIndex).toBe(1.62);
     // §9
     expect(BALANCE.director.waveIntervalMinS).toBe(2.4);
-    // §10
-    expect(BALANCE.economy.goldLeafPerSealBroken).toBe(120);
+    // §10 — goldLeafPer* and inkstone cost-curve numbers are deliberately not
+    // spot-checked against GAME_DESIGN.md's starting values here: Task 4.6's balance
+    // pass explicitly retunes them (per GAME_DESIGN.md line 3's "starting value... may
+    // be tuned" carve-out) to hit the §11 targets, so pinning their original literals
+    // would just make this test fail every time the balance pass legitimately moves them.
     expect(BALANCE.inkstone.secondDraft.reviveLevels).toEqual([1, 4, 8]);
   });
 
@@ -51,12 +55,10 @@ describe('BALANCE', () => {
     expect(hp(1)).toBeCloseTo(680.4, 6);
   });
 
-  it('computes an Inkstone cost curve as round(base * 1.38^L)', () => {
-    const cost = (base: number, level: number): number =>
-      Math.round(base * Math.pow(BALANCE.inkstone.costGrowthPerLevel, level));
-    expect(cost(BALANCE.inkstone.grind.baseCost, 0)).toBe(30);
-    expect(cost(BALANCE.inkstone.grind.baseCost, 5)).toBe(
-      Math.round(30 * Math.pow(1.38, 5)),
+  it('computeUpgradeCost matches round(base * costGrowthPerLevel^L)', () => {
+    expect(computeUpgradeCost('grind', 0)).toBe(BALANCE.inkstone.grind.baseCost);
+    expect(computeUpgradeCost('grind', 5)).toBe(
+      Math.round(BALANCE.inkstone.grind.baseCost * Math.pow(BALANCE.inkstone.costGrowthPerLevel, 5)),
     );
   });
 });

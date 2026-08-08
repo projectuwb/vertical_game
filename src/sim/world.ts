@@ -217,6 +217,9 @@ export interface World {
 
   isDead: boolean;
   deathCause: DeathCause | null;
+  /** Only meaningful when `deathCause === 'blot'` — did a Crust land its contact on the
+   *  exact step the Line emptied? Task 4.6's "Deaths from Crust" §11 target. */
+  deathCrustInvolved: boolean;
 
   /** Computed once at `createWorld` from the Inkstone levels a Passage started with
    *  (Task 4.2) — `BALANCE` itself stays frozen, so every /sim call site that needs an
@@ -291,6 +294,7 @@ export function createWorld(
 
     isDead: false,
     deathCause: null,
+    deathCrustInvolved: false,
 
     upgradeEffects,
     revivesRemaining: upgradeEffects.reviveThresholdsMet,
@@ -378,7 +382,7 @@ function clamp(value: number, min: number, max: number): number {
  * same class every Passage starts with — GAME_DESIGN.md doesn't specify a revived
  * Line's class, logged in DECISIONS.md.
  */
-function killLineIfEmpty(world: World, cause: DeathCause): void {
+function killLineIfEmpty(world: World, cause: DeathCause, crustInvolved = false): void {
   if (world.isDead || world.line.strokes.length > 0) return;
 
   if (world.revivesRemaining > 0) {
@@ -390,6 +394,7 @@ function killLineIfEmpty(world: World, cause: DeathCause): void {
 
   world.isDead = true;
   world.deathCause = cause;
+  world.deathCrustInvolved = crustInvolved;
 }
 
 export function stepWorld(world: World, dtFixed: number, input: WorldInput): void {
@@ -466,11 +471,11 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   const lobsLanded = updateBlotMotion(world.blotPool, dtFixed, BRUSH_Z, world.timeS);
   resolveProjectileBlotCollisions(world.projectilePool, world.blotPool);
   world.blotKilled += resolveBlotDeaths(world.blotPool);
-  const strokesLostToContact = resolveLineContact(world.blotPool, BRUSH_Z);
-  const blotStrokesLost = lobsLanded + strokesLostToContact;
+  const contactResult = resolveLineContact(world.blotPool, BRUSH_Z);
+  const blotStrokesLost = lobsLanded + contactResult.strokesLost;
   if (blotStrokesLost > 0) {
     world.line = removeStrokesFromFront(world.line, blotStrokesLost);
-    killLineIfEmpty(world, 'blot');
+    killLineIfEmpty(world, 'blot', contactResult.crustInvolved);
   }
 
   updateSlipMotion(world.slipPool, dtFixed);

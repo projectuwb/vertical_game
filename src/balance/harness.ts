@@ -18,6 +18,12 @@ import { INKSTONE_TRACK_IDS, type InkstoneTrackId } from '../sim/config.js';
 import { computeGoldLeaf } from '../meta/economy.js';
 import { ALL_BOT_STRATEGIES, createBotState, decideInput, type BotStrategy } from './bot.js';
 import { generateReport, type ReportedDeathCause, type RunResult } from './report.js';
+import { simulateMetaProgression } from './metaProgression.js';
+
+// Comfortably above the §11 target's own upper bound (90) so "never reached" reads as
+// a real finding, not an artefact of too small a cap.
+const META_PROGRESSION_MAX_PASSAGES = 150;
+const META_PROGRESSION_LEVEL_TARGET = 40;
 
 interface CliArgs {
   readonly runs: number;
@@ -107,6 +113,7 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number,
     // even for a run that died before ever breaking one.
     sealReached: world.sealsBroken > 0 || world.seal !== null,
     sealBroken: world.sealsBroken > 0,
+    deathCrustInvolved: world.deathCrustInvolved,
   };
 }
 
@@ -134,6 +141,12 @@ function main(): void {
       ? null
       : `--sweep "${args.sweep}" was requested but is not wired to override BALANCE yet (see DECISIONS.md) — every run below used the unmodified default config.`;
 
+  const metaProgression = simulateMetaProgression(
+    args.seed,
+    META_PROGRESSION_LEVEL_TARGET,
+    META_PROGRESSION_MAX_PASSAGES,
+  );
+
   const report = generateReport(results, {
     seed: args.seed,
     upgrades: args.upgrades,
@@ -141,6 +154,7 @@ function main(): void {
     maxPassageSCap: args.maxPassageS,
     timedOutCount,
     sweepNote,
+    metaProgression,
   });
 
   const outPath = resolve(process.cwd(), args.out);

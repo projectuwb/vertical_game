@@ -111,24 +111,26 @@ describe('resolveLineContact', () => {
   it('a normal Blot reaching the Brush kills exactly 1 Stroke and dies', () => {
     const pool = createBlotPool();
     spawnBlot(pool, 'smudge', 0, -1); // already past the Brush
-    const strokesLost = resolveLineContact(pool, 0);
-    expect(strokesLost).toBe(1);
+    const result = resolveLineContact(pool, 0);
+    expect(result.strokesLost).toBe(1);
+    expect(result.crustInvolved).toBe(false);
     expect(pool.activeCount).toBe(0);
   });
 
-  it('a Crust reaching the Brush kills exactly 3 Strokes and dies', () => {
+  it('a Crust reaching the Brush kills exactly 3 Strokes, dies, and reports crustInvolved', () => {
     const pool = createBlotPool();
     spawnBlot(pool, 'crust', 0, -1);
-    const strokesLost = resolveLineContact(pool, 0);
-    expect(strokesLost).toBe(3);
+    const result = resolveLineContact(pool, 0);
+    expect(result.strokesLost).toBe(3);
+    expect(result.crustInvolved).toBe(true);
     expect(pool.activeCount).toBe(0);
   });
 
   it('Blot ahead of the Brush do not trigger contact', () => {
     const pool = createBlotPool();
     spawnBlot(pool, 'smudge', 0, 5);
-    const strokesLost = resolveLineContact(pool, 0);
-    expect(strokesLost).toBe(0);
+    const result = resolveLineContact(pool, 0);
+    expect(result.strokesLost).toBe(0);
     expect(pool.activeCount).toBe(1);
   });
 
@@ -138,8 +140,9 @@ describe('resolveLineContact', () => {
     spawnBlot(pool, 'crust', 0, -1);
     spawnBlot(pool, 'runner', 1, -2);
     spawnBlot(pool, 'drifter', 2, 5); // not in contact
-    const strokesLost = resolveLineContact(pool, 0);
-    expect(strokesLost).toBe(1 + 3 + 1);
+    const result = resolveLineContact(pool, 0);
+    expect(result.strokesLost).toBe(1 + 3 + 1);
+    expect(result.crustInvolved).toBe(true);
     expect(pool.activeCount).toBe(1); // only the drifter remains
   });
 });

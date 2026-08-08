@@ -115,24 +115,35 @@ export function updateBlotMotion(pool: Pool<Blot>, dt: number, brushZ: number, t
   return lobsLanded;
 }
 
+export interface LineContactResult {
+  readonly strokesLost: number;
+  /** Did a Crust land its contact this step? Task 4.6's "Deaths from Crust" §11 target
+   *  reads this on whichever step actually empties the Line, via world.ts's
+   *  `killLineIfEmpty`. */
+  readonly crustInvolved: boolean;
+}
+
 /**
  * Any Blot reaching the front of the Line kills 1 Stroke and dies — Crust kills 3
  * (GAME_DESIGN.md §5). Releases every Blot that made contact and returns the total
  * Strokes lost this step.
  */
-export function resolveLineContact(pool: Pool<Blot>, brushZ: number): number {
+export function resolveLineContact(pool: Pool<Blot>, brushZ: number): LineContactResult {
   let strokesLost = 0;
+  let crustInvolved = false;
   for (let i = pool.activeCount - 1; i >= 0; i--) {
     const b = pool.get(i);
     if (b.z <= brushZ) {
-      strokesLost +=
-        b.class === 'crust'
-          ? BALANCE.blot.crust.contactStrokeLoss
-          : BALANCE.line.normalContactStrokeLoss;
+      if (b.class === 'crust') {
+        strokesLost += BALANCE.blot.crust.contactStrokeLoss;
+        crustInvolved = true;
+      } else {
+        strokesLost += BALANCE.line.normalContactStrokeLoss;
+      }
       pool.release(b);
     }
   }
-  return strokesLost;
+  return { strokesLost, crustInvolved };
 }
 
 /**
