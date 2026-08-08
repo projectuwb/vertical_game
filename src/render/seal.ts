@@ -8,6 +8,7 @@ import { project } from './projection.js';
 import { PALETTE } from './palette.js';
 import { fillQuad, type Quad } from './strokes.js';
 import { stubActiveTelegraph } from '../sim/seals/stub.js';
+import { smearActiveVisual } from '../sim/seals/smear.js';
 import type { SealEncounterState } from '../sim/seals/framework.js';
 import { computeSealZ, SEAL_X } from '../sim/world.js';
 
@@ -121,6 +122,52 @@ function drawStubTelegraph(
   ctx.restore();
 }
 
+const SMEAR_ZONE_NEAR_Z = -0.4;
+const SMEAR_ZONE_FAR_Z = 8;
+
+/**
+ * The Smear's one attack ("sweeps an arm laterally across two thirds of the lane,"
+ * GAME_DESIGN.md §8.2), all three of its stages read as distinct shapes/motion, not
+ * three colours of the same flash: the telegraph is a thin gathering sliver at the
+ * sweep's *start* position (where the ink is pulling in from); the sweep itself is the
+ * arm's actual current width, moving; the phase-3 residue is a static, fading stain left
+ * at the sweep's *end* position.
+ */
+function drawSmearVisual(ctx: CanvasRenderingContext2D, params: ProjectionParams, seal: SealEncounterState): void {
+  const visual = smearActiveVisual(seal.bossState);
+  if (visual === null) return;
+
+  const halfWidth = visual.stage === 'telegraph' ? 0.3 : visual.armHalfWidthU;
+  const alpha =
+    visual.stage === 'residue'
+      ? 0.5 * (1 - visual.progressFraction) // fades out as the residue's danger window elapses
+      : 0.3 + 0.4 * visual.progressFraction; // telegraph/sweep both brighten toward resolution
+
+  const quad: Quad = [
+    project(visual.centerX - halfWidth, 0, SMEAR_ZONE_NEAR_Z, params),
+    project(visual.centerX + halfWidth, 0, SMEAR_ZONE_NEAR_Z, params),
+    project(visual.centerX + halfWidth, 0, SMEAR_ZONE_FAR_Z, params),
+    project(visual.centerX - halfWidth, 0, SMEAR_ZONE_FAR_Z, params),
+  ];
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  fillQuad(ctx, quad, PALETTE.vermilion);
+  ctx.restore();
+}
+
+function drawBossAttackVisual(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  seal: SealEncounterState,
+  timeS: number,
+): void {
+  if (seal.definitionId === 'stub') {
+    drawStubTelegraph(ctx, params, seal, timeS);
+  } else if (seal.definitionId === 'smear') {
+    drawSmearVisual(ctx, params, seal);
+  }
+}
+
 export function drawSeal(
   ctx: CanvasRenderingContext2D,
   cssWidth: number,
@@ -137,7 +184,7 @@ export function drawSeal(
   }
   if (seal.status === 'broken') return;
 
-  drawStubTelegraph(ctx, params, seal, timeS);
+  drawBossAttackVisual(ctx, params, seal, timeS);
   drawBody(ctx, params, z, seal.staggerRemainingS > 0);
   drawHpBar(ctx, cssWidth, cssHeight, seal);
 }

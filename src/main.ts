@@ -26,6 +26,7 @@ import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
 import { computeGoldLeaf, createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
+import { SMEAR_SEAL_DEFINITION } from './sim/seals/smear.js';
 import { RngRegistry } from './core/rng.js';
 import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
@@ -300,6 +301,10 @@ function bootstrap(): void {
         // Task 3.1's debug hook: starts the stub Seal at sealIndex 0. Real Director-
         // driven cadence (GAME_DESIGN.md §8.2's 75s arcade loop) is Task 3.5.
         startSealEncounter(world, 0, STUB_SEAL_DEFINITION);
+      }
+      if (e.code === 'KeyM') {
+        // Task 3.2's debug hook: starts The Smear (the first real boss) at sealIndex 0.
+        startSealEncounter(world, 0, SMEAR_SEAL_DEFINITION);
       }
     });
   }

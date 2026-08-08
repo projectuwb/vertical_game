@@ -232,7 +232,29 @@ const balance = {
     // 0.6u. Logged in DECISIONS.md.
     engagementZU: 16,
     hitRadiusU: 1.5,
-    smear: { phases: 3, gatherPullS: 0.9, residuePhase3S: 2 },
+    // gatherPullS/residuePhase3S/phases are named exactly in GAME_DESIGN.md §8.2.
+    // sweepReachFraction ("sweeps an arm laterally across two thirds of the lane") is
+    // named too, just given in words — it's the sweep's *total footprint* (leftmost
+    // reach to rightmost reach, centred on the lane), not the arm's own instantaneous
+    // width: an arm literally two thirds of the lane wide would leave only a
+    // one-third-wide gap that itself keeps moving, which is a reflex check, not the
+    // "correct answer that is a position" rule §8.2 explicitly requires of every Seal
+    // attack. armWidthU (2u, comfortably narrower than its own reach) is what makes a
+    // single stationary position near either lane edge safe for the attack's entire
+    // duration. sweepDurationS/attackIntervalS aren't given a number anywhere — 1.2s
+    // keeps the sweep itself clearly slower/more readable than the 0.9s telegraph that
+    // precedes it (the telegraph should never be the fastest part of an attack), and a
+    // 2.5s cooldown leaves clear breathing room between attacks across a 3-phase fight.
+    // Logged in DECISIONS.md.
+    smear: {
+      phases: 3,
+      gatherPullS: 0.9,
+      residuePhase3S: 2,
+      sweepReachFraction: 2 / 3,
+      armWidthU: 2,
+      sweepDurationS: 1.2,
+      attackIntervalS: 2.5,
+    },
     press: { phases: 3, summonPerSlamCount: 8 },
     blank: { phases: 4, eraseDurationS: 3 },
   },
