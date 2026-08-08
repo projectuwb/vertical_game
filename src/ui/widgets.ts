@@ -8,10 +8,13 @@
 import { PALETTE } from '../render/palette.js';
 
 // GAME_DESIGN.md §12: display face is Shippori Mincho B1, UI face is Zen Kaku Gothic
-// New — both OFL, vendored (Task 7.7). Same system-font fallback shape hud.ts already
-// used for the Task 2.11 death overlay this task's summary screen replaces.
-const DISPLAY_FONT_STACK = 'Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif';
-const UI_FONT_STACK = '"Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans", sans-serif';
+// New — both OFL, vendored under /src/assets/fonts and declared via @font-face in
+// index.html (Task 7.7). The system-font stack that used to be the whole story (Task
+// 2.11's fallback, logged in DECISIONS.md) stays as the tail of each stack rather than
+// being deleted — a legitimate fallback for the narrow window before a `swap`-display
+// face finishes loading, or the (untested-for) case a browser rejects the woff2 outright.
+const DISPLAY_FONT_STACK = '"Shippori Mincho B1", Georgia, "Hiragino Mincho ProN", "Yu Mincho", serif';
+const UI_FONT_STACK = '"Zen Kaku Gothic New", "Helvetica Neue", Arial, "Hiragino Sans", "Noto Sans", sans-serif';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,

@@ -12,6 +12,40 @@
     <link rel="icon" href="/icons/icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <style>
+      /* Task 7.7, TECH_SPEC.md §7: two OFL fonts, vendored and subset (Latin + digits +
+         punctuation) to /src/assets/fonts — no CDN, no network fetch at runtime. Display
+         face gets `font-display: block` ("gate numbers must never render in a
+         fallback" — Shippori never silently swaps to the system serif once loaded);
+         UI gets `swap` (never worth blocking ordinary button/label text on). Licenses:
+         OFL-ShipporiMinchoB1.txt / OFL-ZenKakuGothicNew.txt in the same directory. */
+      @font-face {
+        font-family: 'Shippori Mincho B1';
+        src: url('/src/assets/fonts/ShipporiMinchoB1-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Shippori Mincho B1';
+        src: url('/src/assets/fonts/ShipporiMinchoB1-ExtraBold.woff2') format('woff2');
+        font-weight: 700 800;
+        font-style: normal;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Zen Kaku Gothic New';
+        src: url('/src/assets/fonts/ZenKakuGothicNew-Regular.woff2') format('woff2');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Zen Kaku Gothic New';
+        src: url('/src/assets/fonts/ZenKakuGothicNew-Bold.woff2') format('woff2');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
       :root {
         --safe-area-top: env(safe-area-inset-top, 0px);
         --safe-area-right: env(safe-area-inset-right, 0px);
