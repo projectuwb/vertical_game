@@ -8,6 +8,7 @@
 import { Pool, type PoolItem } from '../core/pool.js';
 import { BALANCE } from './config.js';
 import type { StrokeClass } from './stroke.js';
+import type { GameEventBus } from './events.js';
 
 export interface Projectile extends PoolItem {
   class: StrokeClass;
@@ -116,6 +117,7 @@ export function updateFiring(
   rateMultiplier = 1,
   damageMultiplier = 1,
   rangeMultiplier = 1,
+  events?: GameEventBus,
 ): void {
   for (const cls of ALL_CLASSES) {
     const plan = computeFiringPlan(cls, frontRowCounts[cls], backRowCounts[cls], rateMultiplier, damageMultiplier);
@@ -133,6 +135,7 @@ export function updateFiring(
       const source = sources[state.muzzleCursor % sources.length] as FrontRowSource;
       state.muzzleCursor++;
       spawnProjectile(pool, cls, source.x, source.z, plan.damagePerProjectile, rangeMultiplier);
+      events?.emit('fire', { class: cls });
     }
   }
 }

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { BALANCE } from '../../src/sim/config.js';
-import { createWorld, stepWorld, type WorldInput } from '../../src/sim/world.js';
+import { createWorld, startSealEncounter, stepWorld, type WorldInput } from '../../src/sim/world.js';
 import { spawnBlot } from '../../src/sim/blot.js';
 import { spawnSlip } from '../../src/sim/slips.js';
 import { spawnInkPool } from '../../src/sim/wetness.js';
+import { generateGatePair } from '../../src/sim/gates.js';
+import { STUB_SEAL_DEFINITION } from '../../src/sim/seals/stub.js';
 
 const DT = 1 / 60;
 const NO_INPUT: WorldInput = { lateralDelta: 0, holding: false };
@@ -116,6 +118,42 @@ describe('stepWorld', () => {
     }
 
     expect(grew).toBe(true);
+  });
+
+  it('a Slip recruit also emits a recruit event of the recruited class (sim -> audio signalling, Task 4.4)', () => {
+    const world = createWorld(7);
+    spawnSlip(world.slipPool, 'plusOne', 'hane', 0, 20);
+    const recruited: string[] = [];
+    world.events.on('recruit', ({ class: cls }) => recruited.push(cls));
+
+    for (let i = 0; i < 3600 && recruited.length === 0; i++) {
+      stepWorld(world, DT, NO_INPUT);
+    }
+
+    expect(recruited).toEqual(['hane']);
+  });
+
+  it('resolving a Gate pair emits exactly one gateResolved event', () => {
+    const world = createWorld(3);
+    world.currentGatePair = generateGatePair(world.rng);
+    world.gatePairZ = 0; // already at contact distance — resolves on the very next step
+    let resolvedCount = 0;
+    world.events.on('gateResolved', () => resolvedCount++);
+
+    stepWorld(world, DT, NO_INPUT);
+
+    expect(resolvedCount).toBe(1);
+    expect(world.currentGatePair).toBeNull();
+  });
+
+  it('startSealEncounter emits a sealApproach event carrying the sealIndex', () => {
+    const world = createWorld(1);
+    const seen: number[] = [];
+    world.events.on('sealApproach', ({ sealIndex }) => seen.push(sealIndex));
+
+    startSealEncounter(world, 2, STUB_SEAL_DEFINITION);
+
+    expect(seen).toEqual([2]);
   });
 
   it('peakLineCount tracks the highest Line size reached and never drops when the Line later shrinks', () => {

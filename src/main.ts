@@ -27,6 +27,7 @@ import { pickSlipClass, spawnSlip, type Slip, type SlipKind } from './sim/slips.
 import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
 import { createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
+import { computePressure } from './sim/director.js';
 import { computeGoldLeaf } from './meta/economy.js';
 import { loadProfile, saveProfile, recordRunResult, type Profile, type ProfileSettings } from './meta/profile.js';
 import { purchaseUpgrade } from './meta/upgrades.js';
@@ -52,6 +53,9 @@ import { createInkstoneScreen } from './ui/screens/inkstone.js';
 import { createSettingsScreen } from './ui/screens/settings.js';
 import type { AppState } from './ui/screens/run.js';
 import { setScreenVisible } from './ui/widgets.js';
+import { getMixer, resumeAudioContext } from './audio/synth.js';
+import { attachSfx } from './audio/sfx.js';
+import { createMusicController } from './audio/music.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
 /** The Brush's fixed world-space depth: the road scrolls past it, not the other way
@@ -147,6 +151,27 @@ function bootstrap(): void {
   let world: World = createWorld(Date.now(), profile.upgradeLevels);
   const debugRng = new RngRegistry(Date.now());
 
+  // Audio (Task 4.4): the mixer/AudioContext is created immediately (it may start
+  // `suspended` — that's fine, nothing plays until it's resumed) so `setMuted` can be
+  // applied from the loaded Profile right away; actually producing sound needs a real
+  // user gesture, which the one-time listener below provides regardless of which
+  // element the player first interacts with. `attachSfx` is re-subscribed to each new
+  // World's own fresh event bus inside `beginPassage`.
+  const mixer = getMixer();
+  mixer.setMuted(profile.settings.muted);
+  const music = createMusicController(mixer);
+  attachSfx(world.events);
+  document.addEventListener(
+    'pointerdown',
+    () => resumeAudioContext(mixer),
+    { once: true },
+  );
+  document.addEventListener(
+    'keydown',
+    () => resumeAudioContext(mixer),
+    { once: true },
+  );
+
   // Real wall-clock time of death (Task 2.11) — world.timeS itself freezes the instant
   // isDead flips (stepWorld returns before advancing it), so the death sequence's own
   // timing (ink bleed) has to come from somewhere that keeps ticking.
@@ -166,6 +191,7 @@ function bootstrap(): void {
     const seed = Date.now();
     lastSeed = seed;
     world = createWorld(seed, profile.upgradeLevels);
+    attachSfx(world.events); // this Passage's own fresh event bus — the old one (and its listeners) is now unreachable
     deathAtRealMs = null;
     layers.requestRoadTrailReset();
     setAppState('playing');
@@ -242,11 +268,13 @@ function bootstrap(): void {
     onSettingChange: (settings: ProfileSettings) => {
       profile = { ...profile, settings };
       saveProfile(storage, profile);
+      mixer.setMuted(profile.settings.muted); // "Mute persists" (GAME_DESIGN.md §12) — and applies immediately
       refreshSettingsScreen(); // keeps the live export blob in sync with the toggle just flipped
     },
     onImport: (imported: Profile) => {
       profile = imported;
       saveProfile(storage, profile);
+      mixer.setMuted(profile.settings.muted);
       refreshSettingsScreen();
     },
   });
@@ -263,6 +291,11 @@ function bootstrap(): void {
       if (world.isDead && deathAtRealMs === null) {
         handlePassageDeath();
       }
+      // GAME_DESIGN.md §12: tempo tied to Pressure, dropping to a single drone while a
+      // Seal is near (approaching or fighting — "near" covers both, not just the fight
+      // itself, since the drone should already be settling in during the approach).
+      music.setPressure(computePressure(world.timeS, world.line.strokes.length));
+      music.setSealNear(world.seal !== null);
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();

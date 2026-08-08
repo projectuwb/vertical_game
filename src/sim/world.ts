@@ -113,6 +113,8 @@ import { BLANK_SEAL_DEFINITION } from './seals/blank.js';
 import { computeUpgradeEffects, NO_UPGRADES, type UpgradeEffects } from './upgradeEffects.js';
 import type { InkstoneTrackId } from './config.js';
 import type { Pool } from '../core/pool.js';
+import { EventBus } from '../core/events.js';
+import type { GameEvents } from './events.js';
 
 /** The Brush's fixed world-space depth — the world scrolls past it, not the other way
  *  round (see any of Tasks 2.2-2.6's "static road furniture" motion functions). */
@@ -130,6 +132,11 @@ export type DeathCause = 'blot' | 'gate' | 'sealstack' | 'seal';
 
 export interface World {
   readonly rng: RngRegistry;
+  /** sim → render/audio signalling (events.ts's GameEvents, Task 4.4) — a fresh bus per
+   *  Passage, same lifetime as `rng`, so nothing carries stale listeners across a
+   *  restart. /sim only ever emits here; it never imports /audio or /render to react to
+   *  its own events (TECH_SPEC.md §2). */
+  readonly events: EventBus<GameEvents>;
   line: LineState;
   temper: TemperState;
 
@@ -217,6 +224,7 @@ export function createWorld(
   const wetnessCap = BALANCE.wetness.max + upgradeEffects.wetnessCapBonus;
   return {
     rng,
+    events: new EventBus<GameEvents>(),
     line: createLine(startCount, 'hane'),
     temper: createTemperState(),
 
@@ -279,6 +287,7 @@ function jitteredInterval(rng: RngRegistry, base: number): number {
 export function startSealEncounter(world: World, sealIndex: number, definition: SealDefinition): void {
   world.seal = createSealEncounter(sealIndex, definition);
   world.sealDefinition = definition;
+  world.events.emit('sealApproach', { sealIndex });
 }
 
 /** `BALANCE.seals.order`'s string names, resolved to their actual `SealDefinition`s and
@@ -417,6 +426,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
       rateMultiplier,
       world.upgradeEffects.damageMultiplier,
       world.upgradeEffects.rangeMultiplier,
+      world.events,
     );
   }
   updateProjectileMotion(world.projectilePool, dtFixed);
@@ -450,6 +460,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   resolveMissedSlips(world.slipPool, BRUSH_Z);
   for (const cls of updateJoiningRecruits(world.joiningRecruitPool, dtFixed)) {
     world.line = addStroke(world.line, cls);
+    world.events.emit('recruit', { class: cls });
   }
 
   if (world.currentGatePair !== null) {
@@ -460,6 +471,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
       world.line = resolution.line;
       world.temper = resolution.temper;
       world.currentGatePair = null;
+      world.events.emit('gateResolved', {});
       killLineIfEmpty(world, 'gate');
     }
   }

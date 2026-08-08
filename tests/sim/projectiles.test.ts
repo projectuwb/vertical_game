@@ -11,6 +11,8 @@ import {
   type FrontRowSource,
 } from '../../src/sim/projectiles.js';
 import type { StrokeClass } from '../../src/sim/stroke.js';
+import { EventBus } from '../../src/core/events.js';
+import type { GameEvents } from '../../src/sim/events.js';
 
 describe('computeFiringPlan', () => {
   it('front-row-only DPS matches count * class fire rate, under the cap', () => {
@@ -71,6 +73,28 @@ describe('updateFiring + projectile pool', () => {
     const expectedShots = BALANCE.strokes.hane.fireRatePerS * seconds;
     expect(pool.activeCount).toBeGreaterThanOrEqual(Math.floor(expectedShots) - 1);
     expect(pool.activeCount).toBeLessThanOrEqual(Math.ceil(expectedShots) + 1);
+  });
+
+  it('emits a fire event of the correct class each time a projectile actually spawns, and none when events is omitted', () => {
+    const pool = createProjectilePool();
+    const acc = createFiringAccumulators();
+    const front = { hane: 1, tome: 0, harai: 0 } as const;
+    const back = { hane: 0, tome: 0, harai: 0 } as const;
+    const sources = oneSource();
+    const events = new EventBus<GameEvents>();
+    const fired: StrokeClass[] = [];
+    events.on('fire', ({ class: cls }) => fired.push(cls));
+
+    const dt = 1 / 60;
+    for (let i = 0; i < 60; i++) {
+      updateFiring(acc, pool, dt, { ...front }, { ...back }, sources, 1, 1, 1, events);
+    }
+
+    expect(fired.length).toBe(pool.activeCount);
+    expect(fired.every((cls) => cls === 'hane')).toBe(true);
+
+    // Omitting `events` entirely (every existing call site above this test) must not throw.
+    expect(() => updateFiring(acc, pool, dt, { ...front }, { ...back }, sources)).not.toThrow();
   });
 
   it('never spawns more than maxVisibleProjectilesPerClassPerS worth of pool growth in one second, even at N=400', () => {

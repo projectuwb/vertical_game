@@ -32,7 +32,11 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/render/**/*.ts'],
+    // /audio joins /render's carve-out (Task 4.4): noise-buffer synthesis is exactly
+    // the same "cosmetic, never gameplay-deterministic" category as /render's own use
+    // of Math.random — TECH_SPEC.md §2's "/sim must not import /render, /ui, or
+    // /audio" already puts audio in the same non-simulation bucket as render.
+    files: ['src/render/**/*.ts', 'src/audio/**/*.ts'],
     rules: {
       'no-restricted-properties': 'off',
     },
