@@ -15,6 +15,9 @@ export interface TitleScreen {
   readonly root: HTMLDivElement;
   update(profile: Profile): void;
   setInstallPromptVisible(visible: boolean): void;
+  /** Task 7.4: shown only once a Photo-Mode-able run exists this session — there is
+   *  nothing to export before that, same absent-until-earned shape as the install row. */
+  setPhotoModeAvailable(available: boolean): void;
 }
 
 export function createTitleScreen(callbacks: {
@@ -22,6 +25,7 @@ export function createTitleScreen(callbacks: {
   onBeginDaily: () => void;
   onSettings: () => void;
   onStatistics: () => void;
+  onPhotoMode: () => void;
   onInstall: () => void;
   onDismissInstall: () => void;
 }): TitleScreen {
@@ -45,6 +49,10 @@ export function createTitleScreen(callbacks: {
   // look at, not a mutable setting, so it belongs alongside Title's other navigation.
   const statistics = createLinkButton(STRINGS.title.statistics, callbacks.onStatistics);
   const settings = createLinkButton(STRINGS.title.settings, callbacks.onSettings);
+  // Task 7.4: hidden until a Photo-Mode-able run exists this session (see `Replay`'s own
+  // scoping note in main.ts) — a link with nothing to export yet is worse than no link.
+  const photoMode = createLinkButton(STRINGS.title.photoMode, callbacks.onPhotoMode);
+  photoMode.style.display = 'none';
 
   const installRow = document.createElement('div');
   installRow.style.display = 'none';
@@ -62,7 +70,7 @@ export function createTitleScreen(callbacks: {
   const installDismiss = createLinkButton(STRINGS.title.installDismiss, callbacks.onDismissInstall);
   installRow.append(installText, installAction, installDismiss);
 
-  content.append(heading, tagline, bestLine, begin, daily, statistics, settings, installRow);
+  content.append(heading, tagline, bestLine, begin, daily, statistics, photoMode, settings, installRow);
 
   return {
     root,
@@ -72,6 +80,9 @@ export function createTitleScreen(callbacks: {
     },
     setInstallPromptVisible(visible: boolean): void {
       installRow.style.display = visible ? 'flex' : 'none';
+    },
+    setPhotoModeAvailable(available: boolean): void {
+      photoMode.style.display = available ? 'block' : 'none';
     },
   };
 }

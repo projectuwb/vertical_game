@@ -16,6 +16,7 @@ export const STRINGS = {
     installDismiss: 'Not now',
     daily: (dayNumber: number): string => `Today's Passage — Day #${dayNumber}`,
     statistics: 'Statistics',
+    photoMode: 'Save this session’s best as a scroll',
   },
   summary: {
     heading: 'Passage ended',
@@ -42,6 +43,7 @@ export const STRINGS = {
     goldLeaf: (n: number): string => `${n} Gold Leaf`,
     maxed: 'Maxed',
     play: 'Play',
+    menu: 'Menu',
   },
   settings: {
     heading: 'Settings',

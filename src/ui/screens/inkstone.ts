@@ -9,7 +9,7 @@ import type { Profile } from '../../meta/profile.js';
 import { INKSTONE_TRACKS, canAffordUpgrade, computeUpgradeCost } from '../../meta/upgrades.js';
 import { STRINGS } from '../strings.js';
 import { BALANCE, type InkstoneTrackId } from '../../sim/config.js';
-import { createButton, createHeading, createParagraph, createScreenOverlay, createTrackRow } from '../widgets.js';
+import { createButton, createHeading, createLinkButton, createParagraph, createScreenOverlay, createTrackRow } from '../widgets.js';
 
 export interface InkstoneScreen {
   readonly root: HTMLDivElement;
@@ -19,6 +19,7 @@ export interface InkstoneScreen {
 export function createInkstoneScreen(callbacks: {
   onPlay: () => void;
   onPurchase: (track: InkstoneTrackId) => void;
+  onMenu: () => void;
 }): InkstoneScreen {
   const { root, content } = createScreenOverlay();
 
@@ -33,13 +34,18 @@ export function createInkstoneScreen(callbacks: {
   trackList.style.gap = '10px';
 
   // GAME_DESIGN.md §10's loop is "Death → run summary → Inkstone → run again" — the
-  // Inkstone is a mandatory pass-through stop in that loop, not a persistent hub, so
-  // "Play" is its only exit. No Back button: there's nowhere upstream of it to return
-  // to that isn't either the summary screen just left, or Title (reachable at the end
-  // of any Passage, not from mid-shop).
+  // Inkstone is a mandatory pass-through stop in that loop, so "Play" stays the one
+  // primary, obvious exit and the fast path is still exactly two taps (Continue, Play).
+  // A secondary "Menu" link back to Title was added in Task 7.4: Title had always been
+  // reachable "at the end of any Passage, not from mid-shop" (this screen's own original
+  // comment, Task 4.3) because Title held nothing worth revisiting mid-session at the
+  // time — Daily/Statistics/Photo Mode (Tasks 7.1/7.3/7.4) changed that, and without a
+  // way back, those three features become unreachable the moment a player leaves Title
+  // for the first time in a session, which no reload should be required to fix.
   const play = createButton(STRINGS.inkstone.play, callbacks.onPlay, { primary: true });
+  const menu = createLinkButton(STRINGS.inkstone.menu, callbacks.onMenu);
 
-  content.append(heading, goldLine, trackList, play);
+  content.append(heading, goldLine, trackList, play, menu);
 
   return {
     root,

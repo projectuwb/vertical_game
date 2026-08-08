@@ -49,7 +49,11 @@ const CLASS_RGB: Record<StrokeClass, readonly [number, number, number]> = {
   harai: hexToRgb(CLASS_COLOR.harai),
 };
 
-function trailWidthU(strokeCount: number): number {
+/** Exported for Task 7.4's `render/scroll.ts` (the photo-mode trail reconstruction),
+ *  which needs the exact same width-from-Line-size formula this module already uses —
+ *  a second copy would drift the moment §12's "width proportional to N" tuning changed
+ *  here and not there. */
+export function trailWidthU(strokeCount: number): number {
   return Math.min(MAX_WIDTH_U, BASE_WIDTH_U + WIDTH_PER_SQRT_STROKE_U * Math.sqrt(strokeCount));
 }
 
@@ -58,7 +62,8 @@ function trailWidthU(strokeCount: number): number {
  *  look on an *opaque* silhouette), a translucent, constantly-repainted-and-fading wet
  *  ink wash reads as genuinely mixed ink rather than a flat muddy fill, which is exactly
  *  what the trail is supposed to look like. */
-function blendClassColor(line: LineState): string {
+/** Exported for the same reason as `trailWidthU` above. */
+export function blendClassColor(line: LineState): string {
   const n = line.strokes.length;
   if (n === 0) return PALETTE.bone;
   let hane = 0;

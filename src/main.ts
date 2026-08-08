@@ -33,6 +33,8 @@ import { createWorld, startSealEncounter, stepWorld, type World, type WorldInput
 import { computePressure } from './sim/director.js';
 import { computeGoldLeaf } from './meta/economy.js';
 import { computeDailySeed, dailyDayNumber } from './meta/dailySeed.js';
+import type { Replay } from './meta/replay.js';
+import { downloadTrailScroll } from './render/scroll.js';
 import { loadProfile, saveProfile, recordRunResult, type Profile, type ProfileSettings } from './meta/profile.js';
 import { purchaseUpgrade } from './meta/upgrades.js';
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
@@ -184,7 +186,18 @@ function bootstrap(): void {
   // territory, unscoped here).
   let recordedInputs: WorldInput[] = [];
   let currentRunFirstRunTeaching = false;
-  let lastReplay: { readonly seed: number; readonly firstRunTeaching: boolean; readonly inputs: readonly WorldInput[] } | null = null;
+  let lastReplay: Replay | null = null;
+  // Task 7.4: the best Passage *this session* (see photo mode below) — updated in
+  // `handlePassageDeath` alongside `lastReplay` whenever a run beats the session's
+  // previous best. Deliberately session-scoped, not persisted to `Profile`: storing a
+  // full input tape (thousands of steps) in `localStorage` for every profile indefinitely
+  // is a real size/versioning cost this Phase-7 polish task doesn't need to take on.
+  // Compared against `sessionBestDistanceU`, not `profile.bestDistanceU` — the lifetime
+  // best gets harder to beat every session, which would leave photo mode almost always
+  // unavailable; "your best Passage" reads more usefully as "the best one you can
+  // actually export right now" than "the one all-time record you may never beat again."
+  let bestReplay: Replay | null = null;
+  let sessionBestDistanceU = 0;
   let replayInputs: readonly WorldInput[] = [];
   let replayStepIndex = 0;
 
@@ -282,6 +295,11 @@ function bootstrap(): void {
     // fresh array rather than mutating this one in place, so holding this reference is
     // enough; no copy needed.
     lastReplay = { seed: lastSeed ?? 0, firstRunTeaching: currentRunFirstRunTeaching, inputs: recordedInputs };
+    if (world.distanceU > sessionBestDistanceU) {
+      sessionBestDistanceU = world.distanceU;
+      bestReplay = lastReplay;
+      titleScreen.setPhotoModeAvailable(true);
+    }
     const previousBestDistanceU = profile.bestDistanceU;
     const goldLeaf = computeGoldLeaf(
       world.blotKilled,
@@ -350,6 +368,9 @@ function bootstrap(): void {
       statisticsScreen.update(profile);
       setAppState('statistics');
     },
+    onPhotoMode: () => {
+      if (bestReplay !== null) downloadTrailScroll(bestReplay, profile.upgradeLevels);
+    },
     onInstall: () => installPrompt.promptInstall(),
     onDismissInstall: () => installPrompt.dismiss(),
   });
@@ -367,6 +388,10 @@ function bootstrap(): void {
       profile = purchaseUpgrade(profile, track) ?? profile;
       saveProfile(storage, profile);
       refreshInkstoneScreen();
+    },
+    onMenu: () => {
+      titleScreen.update(profile);
+      setAppState('title');
     },
   });
   const settingsScreen = createSettingsScreen({
