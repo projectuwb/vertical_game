@@ -24,7 +24,8 @@ import { BLOT_CLASSES, spawnBlot, type Blot } from './sim/blot.js';
 import { pickSlipClass, spawnSlip, type Slip, type SlipKind } from './sim/slips.js';
 import { generateGatePair } from './sim/gates.js';
 import { spawnSealstack } from './sim/sealstacks.js';
-import { computeGoldLeaf, createWorld, stepWorld, type World } from './sim/world.js';
+import { computeGoldLeaf, createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
+import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
 import { RngRegistry } from './core/rng.js';
 import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
@@ -33,6 +34,7 @@ import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater, resetRoadTrailBas
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
+import { drawSeal } from './render/seal.js';
 import { drawInkBleed, drawInkTrail } from './render/trail.js';
 import { drawDeathSummary, inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
@@ -188,6 +190,9 @@ function bootstrap(): void {
         drawGatePair(layers.actorsCtx, params, world.currentGatePair, world.gatePairZ);
       }
       drawSealstacks(layers.actorsCtx, params, world.sealstackPool);
+      if (world.seal !== null) {
+        drawSeal(layers.actorsCtx, metrics.cssWidth, metrics.cssHeight, params, world.seal, world.timeS);
+      }
       drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line);
       drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, world.projectilePool);
@@ -203,8 +208,8 @@ function bootstrap(): void {
             distanceU: world.distanceU,
             peakLine: world.peakLineCount,
             blotKilled: world.blotKilled,
-            sealsBroken: 0, // Seals don't exist yet (Task 3.x)
-            goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, 0),
+            sealsBroken: world.sealsBroken,
+            goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, world.sealsBroken),
             deathCause: world.deathCause ?? 'blot',
           },
           deathElapsedS,
@@ -290,6 +295,11 @@ function bootstrap(): void {
       }
       if (e.code === 'KeyL') {
         world.line = buildDebugPureLine('harai', BALANCE.phrase.rowSize);
+      }
+      if (e.code === 'KeyB') {
+        // Task 3.1's debug hook: starts the stub Seal at sealIndex 0. Real Director-
+        // driven cadence (GAME_DESIGN.md §8.2's 75s arcade loop) is Task 3.5.
+        startSealEncounter(world, 0, STUB_SEAL_DEFINITION);
       }
     });
   }

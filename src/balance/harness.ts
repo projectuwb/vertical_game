@@ -88,7 +88,7 @@ function runOnePassage(seed: number, strategy: BotStrategy, maxPassageS: number)
     passageLengthS: world.timeS,
     peakLine: world.peakLineCount,
     deathCause,
-    goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, 0),
+    goldLeaf: computeGoldLeaf(world.blotKilled, world.distanceU, world.sealsBroken),
     distanceU: world.distanceU,
     blotKilled: world.blotKilled,
     diedWithin8sOfGate,

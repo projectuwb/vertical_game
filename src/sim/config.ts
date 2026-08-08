@@ -225,6 +225,13 @@ const balance = {
     hpBase: 420,
     hpGrowthPerIndex: 1.62,
     arcadeCadenceS: 75,
+    // Not named anywhere in GAME_DESIGN.md, which describes the fight's choreography but
+    // never a physical stand-off distance: 16u sits comfortably inside all three Stroke
+    // classes' ranges (Hane 26u, Tome 20u, Harai 34u) so no class is locked out of the
+    // fight, and the hit radius reads as a real boss-sized presence next to a Blot's
+    // 0.6u. Logged in DECISIONS.md.
+    engagementZU: 16,
+    hitRadiusU: 1.5,
     smear: { phases: 3, gatherPullS: 0.9, residuePhase3S: 2 },
     press: { phases: 3, summonPerSlamCount: 8 },
     blank: { phases: 4, eraseDurationS: 3 },

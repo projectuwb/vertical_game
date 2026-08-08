@@ -7,6 +7,7 @@ import { applyArmorMultiplier, registerHit, type Projectile } from './projectile
 import type { Blot, BlotClass } from './blot.js';
 import { slipHitRadiusU, type Slip } from './slips.js';
 import { isBrushInSealstackZone, type Sealstack } from './sealstacks.js';
+import { applySealDamage, type SealEncounterState } from './seals/framework.js';
 
 function damageTargetKind(cls: BlotClass): 'crust' | 'normal' {
   return cls === 'crust' ? 'crust' : 'normal';
@@ -145,4 +146,39 @@ export function resolveProjectileSealstackCollisions(
       projectilePool.release(proj);
     }
   }
+}
+
+/**
+ * Hit-tests every active projectile against a fighting Seal's fixed position (a single
+ * circle, not a pool — there's at most one Seal encounter at a time). No armour
+ * multiplier, same reasoning as Sealstacks/Flourish/Phrases: a Seal isn't a Blot class.
+ * Returns the (possibly-staggered-or-broken) updated encounter state; world.ts assigns
+ * it back onto `World.seal` since SealEncounterState is immutable, unlike every other
+ * pooled entity this module resolves against.
+ */
+export function resolveProjectileSealCollisions(
+  projectilePool: Pool<Projectile>,
+  seal: SealEncounterState,
+  sealX: number,
+  sealZ: number,
+): SealEncounterState {
+  if (seal.status !== 'fighting') return seal;
+
+  const hitRadiusSq = BALANCE.seals.hitRadiusU * BALANCE.seals.hitRadiusU;
+  let current = seal;
+
+  for (let pi = projectilePool.activeCount - 1; pi >= 0; pi--) {
+    const proj = projectilePool.get(pi);
+    const dx = proj.x - sealX;
+    const dz = proj.z - sealZ;
+    if (dx * dx + dz * dz > hitRadiusSq) continue;
+
+    current = applySealDamage(current, proj.damage);
+    if (registerHit(proj)) {
+      projectilePool.release(proj);
+    }
+    if (current.status === 'broken') break; // no point testing further hits once it's dead
+  }
+
+  return current;
 }

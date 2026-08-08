@@ -53,6 +53,7 @@ const DEATH_CAUSE_LABEL: Record<DeathCause, string> = {
   blot: 'Overrun',
   gate: 'A Gate cost too much',
   sealstack: 'Blocked and broken',
+  seal: 'Broken by the Seal',
 };
 
 function drawCenteredText(

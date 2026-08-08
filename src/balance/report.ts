@@ -155,8 +155,8 @@ function evaluateTargets(strategyResults: Map<BotStrategy, RunResult[]>): Target
     { name: 'Median peak Line, upgrades level 5', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
     { name: 'Runs to afford first upgrade', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
     { name: 'Runs to Inkstone level 40', status: 'N/A', detail: 'the Inkstone/upgrade system does not exist yet (Task 4.2)' },
-    { name: 'First Seal reached, zero upgrades', status: 'N/A', detail: 'Seals do not exist yet (Task 3.x)' },
-    { name: 'First Seal broken, zero upgrades', status: 'N/A', detail: 'Seals do not exist yet (Task 3.x)' },
+    { name: 'First Seal reached, zero upgrades', status: 'N/A', detail: 'the Director never triggers a Seal encounter yet (Task 3.5); the framework and a stub boss exist (Task 3.1) but nothing starts one automatically' },
+    { name: 'First Seal broken, zero upgrades', status: 'N/A', detail: 'same as above — no bot strategy ever fights a Seal yet' },
     { name: 'Deaths from Crust', status: 'N/A', detail: 'per-Blot-class death attribution is not tracked yet' },
   );
 

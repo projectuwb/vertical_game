@@ -1,2 +1,3 @@
 // Seal framework barrel — Task 3.1
-export {};
+export * from './framework.js';
+export * from './stub.js';

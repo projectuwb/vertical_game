@@ -64,6 +64,7 @@ import {
 } from './gates.js';
 import {
   resolveProjectileBlotCollisions,
+  resolveProjectileSealCollisions,
   resolveProjectileSealstackCollisions,
   resolveProjectileSlipCollisions,
 } from './collision.js';
@@ -99,6 +100,12 @@ import {
   updateMercyState,
   type MercyState,
 } from './director.js';
+import {
+  createSealEncounter,
+  stepSealEncounter,
+  type SealDefinition,
+  type SealEncounterState,
+} from './seals/framework.js';
 import type { Pool } from '../core/pool.js';
 
 /** The Brush's fixed world-space depth — the world scrolls past it, not the other way
@@ -113,7 +120,7 @@ export interface WorldInput {
   readonly holding: boolean;
 }
 
-export type DeathCause = 'blot' | 'gate' | 'sealstack';
+export type DeathCause = 'blot' | 'gate' | 'sealstack' | 'seal';
 
 export interface World {
   readonly rng: RngRegistry;
@@ -143,6 +150,16 @@ export interface World {
   mercy: MercyState;
   currentGatePair: GatePair | null;
   gatePairZ: number;
+
+  /** Null when no Seal encounter (approach or fight) is in progress. `sealDefinition`
+   *  carries the active boss's attack logic alongside it — a `SealEncounterState` is
+   *  plain data (so it can be reassigned immutably like every other World field), but
+   *  stepping it needs the definition's functions too, so they travel together. Task
+   *  3.1 only starts one via `startSealEncounter` (a debug hook); real Director-driven
+   *  cadence is Task 3.5. */
+  seal: SealEncounterState | null;
+  sealDefinition: SealDefinition | null;
+  sealsBroken: number;
 
   wetness: WetnessState;
   flourish: FlourishState;
@@ -194,6 +211,10 @@ export function createWorld(seed: number): World {
     currentGatePair: null,
     gatePairZ: 0,
 
+    seal: null,
+    sealDefinition: null,
+    sealsBroken: 0,
+
     wetness: createWetnessState(),
     flourish: createFlourishState(),
     phrase: createPhraseState(),
@@ -211,6 +232,31 @@ function jitteredInterval(rng: RngRegistry, base: number): number {
   const delta = base * BALANCE.director.intervalJitterFraction;
   return base + rng.range('director', -delta, delta);
 }
+
+/** Starts a Seal encounter — its own approach, phases, and HP, per `definition`. Task
+ *  3.1 exposes this as a direct hook (main.ts's debug keys, tests) rather than wiring
+ *  automatic Director cadence, which is Task 3.5's job. Overwrites any encounter already
+ *  in progress; callers are responsible for not doing that mid-fight. */
+export function startSealEncounter(world: World, sealIndex: number, definition: SealDefinition): void {
+  world.seal = createSealEncounter(sealIndex, definition);
+  world.sealDefinition = definition;
+}
+
+/** World-space z the Seal currently sits at: closing smoothly from the normal
+ *  wave-spawn distance down to `engagementZU` across the whole approach ("a vertical
+ *  seal-mark rises in the distance," GAME_DESIGN.md §8.2), then holding there for the
+ *  fight — a Seal doesn't march in like a Blot once it's actually fighting. Exported so
+ *  render (which needs the identical position) never computes this separately. */
+export function computeSealZ(seal: SealEncounterState): number {
+  if (seal.status !== 'approaching') return BALANCE.seals.engagementZU;
+  const t = seal.approachRemainingS / BALANCE.seals.approachTelegraphS;
+  return BALANCE.seals.engagementZU + (BALANCE.director.spawnDistanceU - BALANCE.seals.engagementZU) * t;
+}
+
+/** Lane-centred — the Seal is a stationary central presence during the fight, not
+ *  something that follows the Brush. Exported so render (which needs the identical
+ *  position) never computes this separately. */
+export const SEAL_X = 0;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -323,6 +369,25 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     killLineIfEmpty(world, 'sealstack');
   }
 
+  if (world.seal !== null && world.sealDefinition !== null) {
+    const sealZ = computeSealZ(world.seal);
+    world.seal = resolveProjectileSealCollisions(world.projectilePool, world.seal, SEAL_X, sealZ);
+
+    const sealCtx = { dt: dtFixed, timeS: world.timeS, brushX, brushZ: BRUSH_Z, rng: world.rng };
+    const sealStep = stepSealEncounter(world.seal, world.sealDefinition, sealCtx);
+    world.seal = sealStep.seal;
+    if (sealStep.strokesLost > 0) {
+      world.line = removeStrokesFromFront(world.line, sealStep.strokesLost);
+      killLineIfEmpty(world, 'seal');
+    }
+
+    if (world.seal.status === 'broken') {
+      world.sealsBroken++;
+      world.seal = null;
+      world.sealDefinition = null;
+    }
+  }
+
   updateInkPoolMotion(world.inkPoolPool, dtFixed);
   world.wetness = resolveInkPoolContact(world.inkPoolPool, world.wetness, brushX, BRUSH_Z);
 
@@ -336,27 +401,36 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   const mercyActive = isMercyActive(world.mercy, world.timeS);
   const pressure = computePressure(world.timeS, world.line.strokes.length);
 
-  if (world.timeS >= world.nextWaveAtTimeS) {
-    spawnWave(world, pressure, mercyActive);
-    world.nextWaveAtTimeS = world.timeS + computeWaveIntervalS(world.timeS);
+  // GAME_DESIGN.md §8.2: "Seals do not block Slips — Slip runs continue during the
+  // fight." Everything else the Director throws (Blot waves, Gates, Sealstacks) pauses
+  // while an encounter (approach or fight) is in progress — the fight is what the
+  // player's attention belongs to. `nextWaveAtTimeS` etc. simply stop being checked
+  // rather than being advanced, so nothing "catches up" in a burst once the Seal ends —
+  // the next wave/Gate/Sealstack just spawns as soon as its (already-passed) threshold
+  // is checked again, exactly once.
+  if (world.seal === null) {
+    if (world.timeS >= world.nextWaveAtTimeS) {
+      spawnWave(world, pressure, mercyActive);
+      world.nextWaveAtTimeS = world.timeS + computeWaveIntervalS(world.timeS);
+    }
+
+    if (world.currentGatePair === null && world.distanceU >= world.nextGateAtDistanceU) {
+      world.currentGatePair = generateGatePair(world.rng);
+      world.gatePairZ = BRUSH_Z + BALANCE.director.spawnDistanceU;
+      world.nextGateAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.gates.pairIntervalU);
+    }
+
+    if (world.distanceU >= world.nextSealstackAtDistanceU) {
+      const side = world.rng.chance('director', BALANCE.gates.fiftyFifty) ? 'left' : 'right';
+      spawnSealstack(world.sealstackPool, side, BRUSH_Z + BALANCE.director.spawnDistanceU);
+      world.nextSealstackAtDistanceU =
+        world.distanceU + jitteredInterval(world.rng, BALANCE.director.sealstackIntervalU);
+    }
   }
 
   if (world.distanceU >= world.nextSlipBudgetAtDistanceU) {
     spawnSlipRun(world, pressure, mercyActive);
     world.nextSlipBudgetAtDistanceU = world.distanceU + BALANCE.director.slipBudget.perU;
-  }
-
-  if (world.currentGatePair === null && world.distanceU >= world.nextGateAtDistanceU) {
-    world.currentGatePair = generateGatePair(world.rng);
-    world.gatePairZ = BRUSH_Z + BALANCE.director.spawnDistanceU;
-    world.nextGateAtDistanceU = world.distanceU + jitteredInterval(world.rng, BALANCE.gates.pairIntervalU);
-  }
-
-  if (world.distanceU >= world.nextSealstackAtDistanceU) {
-    const side = world.rng.chance('director', BALANCE.gates.fiftyFifty) ? 'left' : 'right';
-    spawnSealstack(world.sealstackPool, side, BRUSH_Z + BALANCE.director.spawnDistanceU);
-    world.nextSealstackAtDistanceU =
-      world.distanceU + jitteredInterval(world.rng, BALANCE.director.sealstackIntervalU);
   }
 
   if (world.distanceU >= world.nextInkPoolAtDistanceU) {
