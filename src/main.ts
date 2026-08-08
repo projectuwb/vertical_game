@@ -1,4 +1,12 @@
 // Application bootstrap. Wires platform → sim → render. Fleshed out across Phase 1-2.
+//
+// As of Task 2.7, the actual simulation wiring lives entirely in sim/world.ts
+// (createWorld/stepWorld) — this file just samples input, calls stepWorld once per fixed
+// step, and draws whatever World currently holds. Before 2.7 this file carried its own
+// inline copy of the same wiring (predating World's existence); that duplication is gone
+// now, which also means the real Spawn Director drives Blot waves/Slip runs/Gate
+// pairs/Sealstacks during ordinary play for the first time, not just via the debug keys
+// below.
 
 import {
   attachVisibilityAutoPause,
@@ -9,64 +17,16 @@ import {
 } from './core/loop.js';
 import { InputSampler } from './platform/input.js';
 import { Viewport } from './platform/viewport.js';
-import {
-  addStroke,
-  computeFormationSlot,
-  computeFrontRowSourcePositions,
-  computeRowClassCounts,
-  createLine,
-  removeStrokesFromFront,
-  stepCriticallyDamped,
-  type DampedFollower1D,
-  type LineState,
-} from './sim/line.js';
+import { computeRowClassCounts, type LineState } from './sim/line.js';
 import type { StrokeClass } from './sim/stroke.js';
 import { BALANCE } from './sim/config.js';
-import {
-  createFiringAccumulators,
-  createProjectilePool,
-  updateFiring,
-  updateProjectileMotion,
-} from './sim/projectiles.js';
-import {
-  BLOT_CLASSES,
-  createBlotPool,
-  resolveBlotDeaths,
-  resolveLineContact,
-  spawnBlot,
-  updateBlotMotion,
-} from './sim/blot.js';
-import {
-  createJoiningRecruitPool,
-  createSlipPool,
-  pickSlipClass,
-  resolveSlipDeaths,
-  spawnSlip,
-  updateJoiningRecruits,
-  updateSlipMotion,
-  type SlipKind,
-} from './sim/slips.js';
-import {
-  resolveProjectileBlotCollisions,
-  resolveProjectileSealstackCollisions,
-  resolveProjectileSlipCollisions,
-} from './sim/collision.js';
-import {
-  applyGateEffect,
-  createTemperState,
-  generateGatePair,
-  resolveGatePairContact,
-  type GatePair,
-  type TemperState,
-} from './sim/gates.js';
-import {
-  createSealstackPool,
-  resolveSealstackContact,
-  resolveSealstackDeaths,
-  spawnSealstack,
-  updateSealstackMotion,
-} from './sim/sealstacks.js';
+import { BLOT_CLASSES, spawnBlot, type Blot } from './sim/blot.js';
+import { pickSlipClass, spawnSlip, type Slip, type SlipKind } from './sim/slips.js';
+import { generateGatePair } from './sim/gates.js';
+import { spawnSealstack } from './sim/sealstacks.js';
+import { createWorld, stepWorld, type World } from './sim/world.js';
 import { RngRegistry } from './core/rng.js';
+import type { Pool } from './core/pool.js';
 import { computeProjectionParams } from './render/camera.js';
 import { project } from './render/projection.js';
 import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater } from './render/road.js';
@@ -76,8 +36,8 @@ import { OffscreenLayers } from './render/layers.js';
 import { PALETTE } from './render/palette.js';
 
 const BRUSH_CLAMP = BALANCE.lane.brushClampX;
-const LATERAL_DAMPING_TAU_S = BALANCE.control.dampingTimeConstantS;
-/** The Brush's fixed world-space depth: the road scrolls past it, not the other way round. */
+/** The Brush's fixed world-space depth: the road scrolls past it, not the other way
+ *  round. Matches world.ts's own (private) BRUSH_Z exactly. */
 const BRUSH_Z = 0;
 /** Slightly ahead of the Line's own front-row bulge, so the Brush reads as the leader. */
 const BRUSH_MARKER_Z = BRUSH_Z + 0.5;
@@ -99,7 +59,7 @@ function buildDebugLine(count: number): LineState {
 
 /** Task 2.4's debug control: a mixed-class wave spread across the lane and stacked back
  *  into the distance, to check mass rendering and 60fps at up to 900 concurrent Blot. */
-function spawnDebugBlotWave(pool: ReturnType<typeof createBlotPool>, count: number): void {
+function spawnDebugBlotWave(pool: Pool<Blot>, count: number): void {
   const columns = 9;
   for (let i = 0; i < count; i++) {
     const col = i % columns;
@@ -112,14 +72,16 @@ function spawnDebugBlotWave(pool: ReturnType<typeof createBlotPool>, count: numb
 }
 
 /** Task 2.5's debug control: a run of Slips staked ahead, class chosen the same way the
- *  real Spawn Director (Task 2.7) will — least-held-class-weighted via the seeded
- *  'slips' RNG concern. */
+ *  real Spawn Director (Task 2.7, world.ts's spawnSlipRun) does — least-held-class-
+ *  weighted via the seeded 'slips' RNG concern. Uses a decoupled debug RngRegistry
+ *  rather than world.rng, so pressing a debug key never perturbs the real Director's
+ *  own sequence. */
 function spawnDebugSlipRun(
-  pool: ReturnType<typeof createSlipPool>,
+  pool: Pool<Slip>,
   kind: SlipKind,
   count: number,
   line: LineState,
-  rng: RngRegistry,
+  debugRng: RngRegistry,
 ): void {
   const { front, back } = computeRowClassCounts(line);
   const counts: Record<StrokeClass, number> = {
@@ -127,7 +89,7 @@ function spawnDebugSlipRun(
     tome: front.tome + back.tome,
     harai: front.harai + back.harai,
   };
-  const cls = pickSlipClass(counts, rng);
+  const cls = pickSlipClass(counts, debugRng);
   for (let i = 0; i < count; i++) {
     const x = (i - (count - 1) / 2) * 0.7;
     spawnSlip(pool, kind, cls, x, 30);
@@ -153,74 +115,20 @@ function bootstrap(): void {
   let lastCssHeight = initialMetrics.cssHeight;
   let lastDpr = initialMetrics.devicePixelRatio;
 
-  let targetX = 0;
-  let follower: DampedFollower1D = { position: 0, velocity: 0 };
+  // TECH_SPEC.md §4/§9: every Passage records its seed for reproduction; the actual
+  // recording/display is Task 4.1/4.3 (persistence, screens) — for now each page load
+  // just gets a fresh one, same as before this refactor.
+  let world: World = createWorld(Date.now());
   let holding = false;
-  let scrollDistance = 0;
-  let line: LineState = createLine(BALANCE.line.startCount, 'hane');
-  const projectilePool = createProjectilePool();
-  const firingAccumulators = createFiringAccumulators();
-  const blotPool = createBlotPool();
-  const slipPool = createSlipPool();
-  const joiningRecruitPool = createJoiningRecruitPool();
-  const sealstackPool = createSealstackPool();
-  const rng = new RngRegistry(Date.now());
-  let temper: TemperState = createTemperState();
-  let currentGatePair: GatePair | null = null;
-  let gatePairZ = 0;
+  // Decoupled from world.rng on purpose (see spawnDebugSlipRun) — debug keys are dev
+  // tooling, not part of a replayable Passage.
+  const debugRng = new RngRegistry(Date.now());
 
   const callbacks: LoopCallbacks = {
     update: (dtFixed: number): void => {
       const frame = input.sample(dtFixed);
-      targetX = clamp(targetX + frame.lateralDelta, -BRUSH_CLAMP, BRUSH_CLAMP);
-      follower = stepCriticallyDamped(follower, targetX, dtFixed, LATERAL_DAMPING_TAU_S);
       holding = frame.holding;
-      scrollDistance += BALANCE.forwardSpeed.baseUPerS * dtFixed;
-
-      const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
-      const { front, back } = computeRowClassCounts(line);
-      const sources = computeFrontRowSourcePositions(line, brushX, BRUSH_Z);
-      updateFiring(firingAccumulators, projectilePool, dtFixed, front, back, sources);
-      updateProjectileMotion(projectilePool, dtFixed);
-
-      const lobsLanded = updateBlotMotion(blotPool, dtFixed, BRUSH_Z);
-      resolveProjectileBlotCollisions(projectilePool, blotPool);
-      resolveBlotDeaths(blotPool);
-      const strokesLostToContact = resolveLineContact(blotPool, BRUSH_Z);
-      const strokesLost = lobsLanded + strokesLostToContact;
-      if (strokesLost > 0) {
-        line = removeStrokesFromFront(line, strokesLost);
-      }
-
-      updateSlipMotion(slipPool, dtFixed);
-      resolveProjectileSlipCollisions(projectilePool, slipPool);
-      const backSlot = computeFormationSlot(line.strokes.length);
-      resolveSlipDeaths(slipPool, joiningRecruitPool, {
-        x: brushX + backSlot.lateralOffset,
-        z: BRUSH_Z + backSlot.depthOffset,
-      });
-      for (const cls of updateJoiningRecruits(joiningRecruitPool, dtFixed)) {
-        line = addStroke(line, cls);
-      }
-
-      if (currentGatePair !== null) {
-        gatePairZ -= BALANCE.forwardSpeed.baseUPerS * dtFixed;
-        if (gatePairZ <= BRUSH_Z) {
-          const chosenGate = resolveGatePairContact(currentGatePair, brushX);
-          const resolution = applyGateEffect(line, temper, chosenGate.effect);
-          line = resolution.line;
-          temper = resolution.temper;
-          currentGatePair = null;
-        }
-      }
-
-      updateSealstackMotion(sealstackPool, dtFixed);
-      resolveProjectileSealstackCollisions(projectilePool, sealstackPool);
-      resolveSealstackDeaths(sealstackPool);
-      const strokesLostToSealstack = resolveSealstackContact(sealstackPool, BRUSH_Z, brushX);
-      if (strokesLostToSealstack > 0) {
-        line = removeStrokesFromFront(line, strokesLostToSealstack);
-      }
+      stepWorld(world, dtFixed, { lateralDelta: frame.lateralDelta, holding: frame.holding });
     },
     render: (_alpha: number): void => {
       const metrics = viewport.getMetrics();
@@ -242,19 +150,19 @@ function bootstrap(): void {
         layers.markSkyWaterClean();
       }
 
-      drawRoad(layers.roadTrailCtx, metrics.cssWidth, metrics.cssHeight, params, scrollDistance);
+      drawRoad(layers.roadTrailCtx, metrics.cssWidth, metrics.cssHeight, params, world.distanceU);
 
       layers.clearActors();
-      const brushX = clamp(follower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
-      drawBlot(layers.actorsCtx, params, blotPool, BRUSH_Z);
-      drawSlips(layers.actorsCtx, params, slipPool);
-      if (currentGatePair !== null) {
-        drawGatePair(layers.actorsCtx, params, currentGatePair, gatePairZ);
+      const brushX = clamp(world.brushFollower.position, -BRUSH_CLAMP, BRUSH_CLAMP);
+      drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z);
+      drawSlips(layers.actorsCtx, params, world.slipPool);
+      if (world.currentGatePair !== null) {
+        drawGatePair(layers.actorsCtx, params, world.currentGatePair, world.gatePairZ);
       }
-      drawSealstacks(layers.actorsCtx, params, sealstackPool);
-      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, line);
-      drawJoiningRecruits(layers.actorsCtx, params, joiningRecruitPool);
-      drawProjectiles(layers.actorsCtx, params, projectilePool);
+      drawSealstacks(layers.actorsCtx, params, world.sealstackPool);
+      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line);
+      drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
+      drawProjectiles(layers.actorsCtx, params, world.projectilePool);
 
       const marker = project(brushX, BRUSH_MARKER_RADIUS_U, BRUSH_MARKER_Z, params);
       layers.actorsCtx.beginPath();
@@ -295,25 +203,28 @@ function bootstrap(): void {
     document.addEventListener('keydown', (e) => {
       const lineSize = debugLineSizes[e.code];
       if (lineSize !== undefined) {
-        line = buildDebugLine(lineSize);
+        world.line = buildDebugLine(lineSize);
       }
       const waveSize = debugBlotWaveSizes[e.code];
       if (waveSize !== undefined) {
-        blotPool.releaseAll();
-        spawnDebugBlotWave(blotPool, waveSize);
+        world.blotPool.releaseAll();
+        spawnDebugBlotWave(world.blotPool, waveSize);
       }
       if (e.code === 'Digit9') {
-        spawnDebugSlipRun(slipPool, 'plusOne', 8, line, rng);
+        spawnDebugSlipRun(world.slipPool, 'plusOne', 8, world.line, debugRng);
       }
       if (e.code === 'Digit0') {
-        spawnDebugSlipRun(slipPool, 'plusTwentyFive', 1, line, rng);
+        spawnDebugSlipRun(world.slipPool, 'plusTwentyFive', 1, world.line, debugRng);
       }
       if (e.code === 'KeyG') {
-        currentGatePair = generateGatePair(rng);
-        gatePairZ = 40;
+        world.currentGatePair = generateGatePair(debugRng);
+        world.gatePairZ = 40;
       }
       if (e.code === 'KeyH') {
-        spawnSealstack(sealstackPool, rng.chance('cosmetic', 0.5) ? 'left' : 'right', 40);
+        spawnSealstack(world.sealstackPool, debugRng.chance('cosmetic', 0.5) ? 'left' : 'right', 40);
+      }
+      if (e.code === 'KeyR') {
+        world = createWorld(Date.now());
       }
     });
   }
