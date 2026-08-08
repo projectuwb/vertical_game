@@ -101,7 +101,7 @@ function stepSweeping(
   const centerX = currentSweepCenterX({ ...state, sweepElapsedS });
   const inZone = Math.abs(ctx.brushX - centerX) <= ARM_HALF_WIDTH_U;
   const justHit = inZone && !state.hasHitThisSweep;
-  const strokesLost = justHit ? BALANCE.line.normalContactStrokeLoss : 0;
+  const strokesLost = justHit ? BALANCE.seals.smear.attackStrokeLoss : 0;
 
   if (sweepElapsedS < BALANCE.seals.smear.sweepDurationS) {
     return { bossState: { ...state, sweepElapsedS, hasHitThisSweep: state.hasHitThisSweep || justHit }, strokesLost };
@@ -121,7 +121,7 @@ function stepResidue(state: SmearBossState, ctx: SealStepContext): SealBossStepR
   const residueElapsedS = state.residueElapsedS + ctx.dt;
   const inZone = Math.abs(ctx.brushX - state.residueCenterX) <= ARM_HALF_WIDTH_U;
   const justHit = inZone && !state.hasHitThisResidue;
-  const strokesLost = justHit ? BALANCE.line.normalContactStrokeLoss : 0;
+  const strokesLost = justHit ? BALANCE.seals.smear.attackStrokeLoss : 0;
 
   if (residueElapsedS < BALANCE.seals.smear.residuePhase3S) {
     return {

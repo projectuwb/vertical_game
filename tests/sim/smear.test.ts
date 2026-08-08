@@ -93,7 +93,7 @@ describe('The Smear: sweep hit detection', () => {
       totalStrokesLost += result.strokesLost;
     }
 
-    expect(totalStrokesLost).toBe(BALANCE.line.normalContactStrokeLoss);
+    expect(totalStrokesLost).toBe(BALANCE.seals.smear.attackStrokeLoss);
   });
 
   it('a single stationary position survives an entire sweep, by design — the arm is narrow, only its total reach spans two thirds of the lane', () => {

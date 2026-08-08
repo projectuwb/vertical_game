@@ -225,6 +225,26 @@ const balance = {
     hpBase: 420,
     hpGrowthPerIndex: 1.62,
     arcadeCadenceS: 75,
+    // Not named in GAME_DESIGN.md (§8.2 describes each attack's choreography, never a
+    // hit-cost number) — previously all three bosses reused BALANCE.line's ordinary
+    // Blot-contact loss (1), which meant a Seal fight could never meaningfully threaten
+    // even an imperfectly-dodging Line (Task 4.6b found "First Seal broken" tracking
+    // "First Seal reached" ~1:1, i.e. essentially nobody who reaches a Seal ever loses
+    // the fight). Per-boss (not one shared number): the isolated zero-upgrades baseline
+    // fights (smear.test.ts/press.test.ts, Task 3.2/3.3) start from a fresh Line of only
+    // `line.startCount` (3) — nowhere near the ~30-40 Strokes a real harness run has
+    // grown by the time it reaches its first Seal at 75s — so Smear's own dumb-bot
+    // baseline (doesn't return to lane centre between attacks, per its own comment) is
+    // already knife-edge at the *old* value (1): raising it even to 2 dropped that
+    // isolated test from 25% to 0/40 wins, a real regression with no §11 benefit,
+    // since Press's own isolated baseline was already unaffected by the same change (its
+    // bot fully dodges every attack, taking 0 hits regardless of this value) and
+    // Blank has no isolated win-rate test to protect at all. So: leave the Smear at the
+    // pre-existing value (1) — it was already the fragile one — and give Press/Blank a
+    // real, higher, independently-tunable number, which is where GAME_DESIGN.md's own
+    // choreography ("a shockwave ring," "a cone that converts hit Strokes") already
+    // implies a heavier single hit than an ordinary Blot's graze. Logged in DECISIONS.md
+    // (Task 7.9).
     // Not named anywhere in GAME_DESIGN.md, which describes the fight's choreography but
     // never a physical stand-off distance: 16u sits comfortably inside all three Stroke
     // classes' ranges (Hane 26u, Tome 20u, Harai 34u) so no class is locked out of the
@@ -254,6 +274,11 @@ const balance = {
       armWidthU: 2,
       sweepDurationS: 1.2,
       attackIntervalS: 2.5,
+      // See the comment on `seals.attackStrokeLoss`'s removal above: kept at the
+      // pre-Task-7.9 shared value (1) because the isolated zero-upgrades baseline test
+      // (smear.test.ts) starts from a 3-Stroke Line and its own bot never returns to
+      // lane centre between attacks — already knife-edge at 1, unwinnable at 2.
+      attackStrokeLoss: 1,
     },
     // phases/summonPerSlamCount are named exactly in GAME_DESIGN.md §8.2. The rest
     // reinterpret "a shockwave ring; you must be outside the ring or in the one gap in
@@ -280,6 +305,13 @@ const balance = {
       gapHalfWidthU: 1.25,
       attackIntervalS: 2.2,
       beatGapS: 0.6,
+      // See the comment on `seals.attackStrokeLoss`'s removal above: the isolated
+      // zero-upgrades baseline test (press.test.ts) fully dodges every slam (0 hits
+      // regardless of this value), so there's no isolated-test ceiling here — set well
+      // above the old shared value (1) to give a real harness bot's imperfect dodging
+      // (against a much larger, ~30-40-Stroke Line at a real first-Seal encounter)
+      // something to actually lose.
+      attackStrokeLoss: 4,
     },
     // phases/eraseDurationS are named exactly in GAME_DESIGN.md §8.2. The Blank
     // alternates its two named attacks — the erasure beam ("removes Slips and Gates
@@ -306,6 +338,10 @@ const balance = {
       coneHalfWidthU: 1.75,
       attackIntervalS: 2.3,
       convertedBlotAheadZU: 3,
+      // See the comment on `seals.attackStrokeLoss`'s removal above: no isolated
+      // win-rate test protects this one at all, so it's free to match the Press's value
+      // — both are meant to read as a heavier single hit than an ordinary Blot's graze.
+      attackStrokeLoss: 4,
     },
   },
 

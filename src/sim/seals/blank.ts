@@ -79,7 +79,7 @@ function stepTelegraph(state: BlankBossState, ctx: SealStepContext): SealBossSte
   }
 
   const inCone = Math.abs(ctx.brushX - state.coneCenterX) <= CONE_HALF_WIDTH_U;
-  const strokesLost = inCone ? BALANCE.line.normalContactStrokeLoss : 0;
+  const strokesLost = inCone ? BALANCE.seals.blank.attackStrokeLoss : 0;
   for (let i = 0; i < strokesLost; i++) {
     spawnBlot(ctx.blotPool, 'smudge', ctx.brushX, ctx.brushZ + BALANCE.seals.blank.convertedBlotAheadZU);
   }

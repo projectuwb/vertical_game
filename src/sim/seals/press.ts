@@ -130,7 +130,7 @@ function stepTelegraph(
   }
 
   const inAnyGap = state.gapCenters.some((c) => Math.abs(ctx.brushX - c) <= GAP_HALF_WIDTH_U);
-  const strokesLost = inAnyGap ? 0 : BALANCE.line.normalContactStrokeLoss;
+  const strokesLost = inAnyGap ? 0 : BALANCE.seals.press.attackStrokeLoss;
   spawnSlamSmudges(ctx.blotPool);
 
   const isFirstBeatOfTwo = phaseIndex >= FINAL_PHASE_INDEX && state.beatIndex === 0;

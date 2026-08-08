@@ -104,8 +104,8 @@ describe('The Blank: the cone converts a hit Stroke into an attacking Blot', () 
     const coneCenterX = blankActiveVisual(bossState)?.coneCenterX ?? 0;
 
     const { strokesLost, blotCount } = driveToConeResolve(coneCenterX);
-    expect(strokesLost).toBe(BALANCE.line.normalContactStrokeLoss);
-    expect(blotCount).toBe(BALANCE.line.normalContactStrokeLoss);
+    expect(strokesLost).toBe(BALANCE.seals.blank.attackStrokeLoss);
+    expect(blotCount).toBe(BALANCE.seals.blank.attackStrokeLoss);
   });
 });
 
