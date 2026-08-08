@@ -47,6 +47,7 @@ export function drawLine(
   brushZ: number,
   line: LineState,
   quality?: QualitySettings,
+  shapesOnly = false,
 ): void {
   const classification =
     quality === undefined
@@ -59,7 +60,7 @@ export function drawLine(
   for (let i = 0; i < individualCount; i++) {
     const stroke = line.strokes[i] as { class: StrokeClass };
     const slot = computeFormationSlot(i);
-    drawStroke(ctx, params, brushX + slot.lateralOffset, brushZ + slot.depthOffset, stroke.class);
+    drawStroke(ctx, params, brushX + slot.lateralOffset, brushZ + slot.depthOffset, stroke.class, shapesOnly);
   }
 
   if (classification.hasDensityBlock) {
@@ -73,6 +74,7 @@ function drawStroke(
   x: number,
   z: number,
   cls: StrokeClass,
+  shapesOnly: boolean,
 ): void {
   const ground = project(x, 0, z, params);
   const pxSize = SILHOUETTE_BASE_SIZE_U * ground.scale * params.unit;
@@ -83,6 +85,48 @@ function drawStroke(
     drawTomeGlyph(ctx, ground.screenX, ground.screenY, pxSize);
   } else {
     drawHaraiGlyph(ctx, ground.screenX, ground.screenY, pxSize);
+  }
+  if (shapesOnly) drawShapesOnlyMark(ctx, ground.screenX, ground.screenY, pxSize, cls);
+}
+
+/** GAME_DESIGN.md §12's colourblind requirement: "class must be legible from silhouette
+ *  alone... Ship a Shapes-Only toggle that additionally stamps a small glyph mark on
+ *  every Stroke and Slip." The three glyphs (tick/block/sliver) are already
+ *  silhouette-distinct without this — it's a deliberately redundant, extra-legible cue
+ *  for players who want it, not the primary mechanism. A dot count (1/2/3) rather than
+ *  lettering: no font dependency, reads at the small on-screen size a single Stroke
+ *  renders at, and — like the glyphs themselves — survives any colour transform,
+ *  including full greyscale, since it's placement/count, not hue. `PALETTE.deep` (the
+ *  darkest colour in the whole palette) against any of the three class colours (all
+ *  lighter) keeps the mark visible on every one without a fourth palette colour. */
+const SHAPES_ONLY_MARK_COUNT: Record<StrokeClass, number> = { hane: 1, tome: 2, harai: 3 };
+const SHAPES_ONLY_DOT_RADIUS_FRACTION = 0.06;
+const SHAPES_ONLY_DOT_SPACING_FRACTION = 0.22;
+
+/** Exported purely so `tests/render/strokes.test.ts` can assert the three classes get
+ *  distinct, stable mark counts without needing a mock CanvasRenderingContext2D — the
+ *  actual drawing (like the rest of /render) is verified by eye via headless Chromium,
+ *  same convention Tasks 4.3-4.5 already established. */
+export function shapesOnlyMarkCount(cls: StrokeClass): number {
+  return SHAPES_ONLY_MARK_COUNT[cls];
+}
+
+function drawShapesOnlyMark(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  cls: StrokeClass,
+): void {
+  const count = SHAPES_ONLY_MARK_COUNT[cls];
+  const spacing = size * SHAPES_ONLY_DOT_SPACING_FRACTION;
+  const radius = Math.max(0.75, size * SHAPES_ONLY_DOT_RADIUS_FRACTION);
+  const startX = cx - (spacing * (count - 1)) / 2;
+  ctx.fillStyle = PALETTE.deep;
+  for (let i = 0; i < count; i++) {
+    ctx.beginPath();
+    ctx.arc(startX + i * spacing, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -296,7 +340,12 @@ const SLIP_THICKNESS_U = 0.08;
  * Paper slips staked along the verge (GAME_DESIGN.md §7.1): class-tinted, growing wider
  * with value — +1 modest, +5 larger, the +25 Banner spanning a third of the lane.
  */
-export function drawSlips(ctx: CanvasRenderingContext2D, params: ProjectionParams, pool: Pool<Slip>): void {
+export function drawSlips(
+  ctx: CanvasRenderingContext2D,
+  params: ProjectionParams,
+  pool: Pool<Slip>,
+  shapesOnly = false,
+): void {
   pool.forEachActive((s) => {
     const widthU =
       s.kind === 'plusOne'
@@ -313,6 +362,13 @@ export function drawSlips(ctx: CanvasRenderingContext2D, params: ProjectionParam
       project(s.x - halfWidth, SLIP_HEIGHT_U, s.z, params),
     ];
     fillQuad(ctx, corners, CLASS_COLOR[s.class]);
+
+    if (shapesOnly) {
+      const centerX = (corners[0].screenX + corners[1].screenX + corners[2].screenX + corners[3].screenX) / 4;
+      const centerY = (corners[0].screenY + corners[1].screenY + corners[2].screenY + corners[3].screenY) / 4;
+      const sizePx = Math.abs(corners[1].screenX - corners[0].screenX);
+      drawShapesOnlyMark(ctx, centerX, centerY, sizePx, s.class);
+    }
   });
 }
 

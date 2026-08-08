@@ -168,6 +168,8 @@ export function createTrackRow(opts: TrackRowOptions): HTMLButtonElement {
     flexDirection: 'column',
     gap: '6px',
     width: '100%',
+    minHeight: '44px', // Task 5.3's ≥44px hit-target rule
+    boxSizing: 'border-box',
     padding: '12px 14px',
     borderRadius: '8px',
     border: `1px solid ${canBuy ? PALETTE.goldLeaf : PALETTE.bone + '33'}`,

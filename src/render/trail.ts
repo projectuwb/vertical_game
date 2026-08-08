@@ -98,6 +98,7 @@ export function drawInkTrail(
   brushZ: number,
   line: LineState,
   timeS: number,
+  reducedMotion = false,
 ): void {
   const strokeCount = line.strokes.length;
   if (strokeCount === 0) return;
@@ -105,12 +106,20 @@ export function drawInkTrail(
   const halfWidth = trailWidthU(strokeCount) / 2;
   const color = blendClassColor(line);
 
-  const wobbleL =
-    Math.sin(timeS * WOBBLE_HZ * Math.PI * 2) * halfWidth * WOBBLE_AMPLITUDE_FRACTION +
-    (Math.random() - 0.5) * halfWidth * JITTER_AMPLITUDE_FRACTION;
-  const wobbleR =
-    Math.sin(timeS * WOBBLE_HZ * Math.PI * 2 + WOBBLE_PHASE_OFFSET) * halfWidth * WOBBLE_AMPLITUDE_FRACTION +
-    (Math.random() - 0.5) * halfWidth * JITTER_AMPLITUDE_FRACTION;
+  // GAME_DESIGN.md §12: "respect prefers-reduced-motion by... disabling trail wobble
+  // (never by removing gameplay feedback)" — zeroing the two motion terms out (Task
+  // 2.10's own note above already flagged this exact spot) rather than deleting the
+  // mechanism: the trail itself, its width/colour/darkening behaviour, is still full
+  // gameplay feedback and stays completely intact, only the organic wobble/jitter motion
+  // is suppressed.
+  const wobbleL = reducedMotion
+    ? 0
+    : Math.sin(timeS * WOBBLE_HZ * Math.PI * 2) * halfWidth * WOBBLE_AMPLITUDE_FRACTION +
+      (Math.random() - 0.5) * halfWidth * JITTER_AMPLITUDE_FRACTION;
+  const wobbleR = reducedMotion
+    ? 0
+    : Math.sin(timeS * WOBBLE_HZ * Math.PI * 2 + WOBBLE_PHASE_OFFSET) * halfWidth * WOBBLE_AMPLITUDE_FRACTION +
+      (Math.random() - 0.5) * halfWidth * JITTER_AMPLITUDE_FRACTION;
 
   const nearZ = brushZ + TRAIL_NEAR_OFFSET_U;
   const farZ = brushZ + TRAIL_FAR_OFFSET_U;

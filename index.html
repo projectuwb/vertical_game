@@ -35,6 +35,16 @@
       #app canvas {
         display: block;
       }
+      /* Task 5.3 (Accessibility): an explicit, on-brand keyboard-focus ring for every
+         /ui screen's real <button>/<input>/<textarea> elements — visible only for
+         keyboard/assistive-tech focus (:focus-visible), never on a pointer tap, so it
+         never reads as a stray highlight during ordinary touch/mouse play. */
+      button:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid #c9a227;
+        outline-offset: 2px;
+      }
     </style>
   </head>
   <body>

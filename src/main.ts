@@ -361,7 +361,7 @@ function bootstrap(): void {
       // layer never clears itself (it's a persisting accumulation, road.ts), so a
       // skipped frame simply doesn't add fresh ink that frame, it doesn't leave a gap.
       if (renderFrameCount % currentQuality.trailPaintEveryNthFrame === 0) {
-        drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
+        drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS, profile.settings.reducedMotion);
       }
 
       const deathElapsedS = deathAtRealMs === null ? 0 : (nowMs() - deathAtRealMs) / 1000;
@@ -371,7 +371,7 @@ function bootstrap(): void {
 
       layers.clearActors();
       drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z);
-      drawSlips(layers.actorsCtx, params, world.slipPool);
+      drawSlips(layers.actorsCtx, params, world.slipPool, profile.settings.shapesOnly);
       if (world.currentGatePair !== null) {
         drawGatePair(layers.actorsCtx, params, world.currentGatePair, world.gatePairZ);
       }
@@ -379,7 +379,7 @@ function bootstrap(): void {
       if (world.seal !== null) {
         drawSeal(layers.actorsCtx, metrics.cssWidth, metrics.cssHeight, params, world.seal, world.timeS);
       }
-      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line, currentQuality);
+      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line, currentQuality, profile.settings.shapesOnly);
       drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, world.projectilePool);
       drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);
