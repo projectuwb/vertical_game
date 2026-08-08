@@ -47,6 +47,7 @@ import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } 
 import { drawBlot } from './render/blot.js';
 import { drawPhraseEffects } from './render/effects.js';
 import { drawSeal, isRoadMarkingsErased } from './render/seal.js';
+import { attachFlourishShake, createShakeState, currentShakeOffset, triggerShake, type ShakeState } from './render/shake.js';
 import { drawInkBleed, drawInkTrail } from './render/trail.js';
 import { inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
@@ -177,6 +178,14 @@ function bootstrap(): void {
   const music = createMusicController(mixer);
   attachSfx(world.events);
   attachFlourishHaptics(world.events);
+  // Task 7.10, GAME_DESIGN.md §12: camera shake on Seal impacts (a Stroke-loss diff,
+  // handled inline in `update` below, right alongside the identical diff `update` already
+  // computes for haptics) and Flourish (its own event, same as haptics). Purely cosmetic
+  // — lives outside World entirely, so it's a plain closure variable, not sim state.
+  let shakeState: ShakeState = createShakeState();
+  attachFlourishShake(world.events, () => {
+    shakeState = triggerShake(world.timeS);
+  });
   document.addEventListener(
     'pointerdown',
     () => resumeAudioContext(mixer),
@@ -213,6 +222,9 @@ function bootstrap(): void {
     // This Passage's own fresh event bus — the old one (and its listeners) is now unreachable.
     attachSfx(world.events);
     attachFlourishHaptics(world.events);
+    attachFlourishShake(world.events, () => {
+      shakeState = triggerShake(world.timeS);
+    });
     deathAtRealMs = null;
     layers.requestRoadTrailReset();
     setAppState('playing');
@@ -320,7 +332,11 @@ function bootstrap(): void {
       // for either (Task 4.4 deliberately scoped GameEvents to §12's audio-only list),
       // so this diffs the Line's own Stroke count the same way every other per-step
       // main.ts concern (e.g. the death check right below) already reads World directly.
-      fireLineLossHaptic(strokesBefore - world.line.strokes.length, sealActiveBefore);
+      const strokesLostThisStep = strokesBefore - world.line.strokes.length;
+      fireLineLossHaptic(strokesLostThisStep, sealActiveBefore);
+      if (strokesLostThisStep > 0 && sealActiveBefore) {
+        shakeState = triggerShake(world.timeS);
+      }
       if (world.isDead && deathAtRealMs === null) {
         handlePassageDeath();
       }
@@ -382,7 +398,7 @@ function bootstrap(): void {
       }
 
       layers.clearActors();
-      drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z);
+      drawBlot(layers.actorsCtx, params, world.blotPool, BRUSH_Z, world.timeS);
       drawSlips(layers.actorsCtx, params, world.slipPool, profile.settings.shapesOnly);
       if (world.currentGatePair !== null) {
         drawGatePair(layers.actorsCtx, params, world.currentGatePair, world.gatePairZ);
@@ -397,7 +413,7 @@ function bootstrap(): void {
       drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);
       drawBrush(layers.actorsCtx, params, brushX, BRUSH_Z, world.wetness, world.flourish, world.timeS);
 
-      layers.compositeInto(viewport.ctx);
+      layers.compositeInto(viewport.ctx, currentShakeOffset(shakeState, world.timeS, profile.settings.reducedMotion));
     },
   };
 

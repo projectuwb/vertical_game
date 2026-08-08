@@ -473,7 +473,7 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
   world.phrase = phraseResult.state;
 
   const lobsLanded = updateBlotMotion(world.blotPool, dtFixed, BRUSH_Z, world.timeS);
-  resolveProjectileBlotCollisions(world.projectilePool, world.blotPool);
+  resolveProjectileBlotCollisions(world.projectilePool, world.blotPool, world.timeS);
   world.blotKilled += resolveBlotDeaths(world.blotPool);
   const contactResult = resolveLineContact(world.blotPool, BRUSH_Z);
   const blotStrokesLost = lobsLanded + contactResult.strokesLost;

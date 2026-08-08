@@ -13,8 +13,12 @@ function damageTargetKind(cls: BlotClass): 'crust' | 'normal' {
   return cls === 'crust' ? 'crust' : 'normal';
 }
 
-function applyDamage(blot: Blot, proj: Projectile): void {
+/** `timeS` (Task 7.10) stamps `lastHitAtS` for `render/blot.ts`'s hit-feedback — a plain
+ *  data write, not a rendering concern in itself, the same way Phrase's `lastFiredAtS`
+ *  is set from /sim and only ever read from /render. */
+function applyDamage(blot: Blot, proj: Projectile, timeS: number): void {
   blot.hp -= applyArmorMultiplier(proj.class, proj.damage, damageTargetKind(blot.class));
+  blot.lastHitAtS = timeS;
 }
 
 /**
@@ -28,6 +32,7 @@ function applyDamage(blot: Blot, proj: Projectile): void {
 export function resolveProjectileBlotCollisions(
   projectilePool: Pool<Projectile>,
   blotPool: Pool<Blot>,
+  timeS: number,
 ): void {
   const hitRadiusSq = BALANCE.collision.hitRadiusU * BALANCE.collision.hitRadiusU;
 
@@ -48,10 +53,10 @@ export function resolveProjectileBlotCollisions(
 
     if (hitBlot === undefined) continue;
 
-    applyDamage(hitBlot, proj);
+    applyDamage(hitBlot, proj, timeS);
 
     if (proj.splashRadiusU > 0) {
-      applySplash(blotPool, proj, hitBlot);
+      applySplash(blotPool, proj, hitBlot, timeS);
     }
 
     if (registerHit(proj)) {
@@ -61,7 +66,7 @@ export function resolveProjectileBlotCollisions(
 }
 
 /** Tome's splash: every other Blot within splashRadiusU of the primary hit also takes full damage. */
-function applySplash(blotPool: Pool<Blot>, proj: Projectile, primary: Blot): void {
+function applySplash(blotPool: Pool<Blot>, proj: Projectile, primary: Blot, timeS: number): void {
   const splashSq = proj.splashRadiusU * proj.splashRadiusU;
   for (let bi = blotPool.activeCount - 1; bi >= 0; bi--) {
     const blot = blotPool.get(bi);
@@ -69,7 +74,7 @@ function applySplash(blotPool: Pool<Blot>, proj: Projectile, primary: Blot): voi
     const dx = proj.x - blot.x;
     const dz = proj.z - blot.z;
     if (dx * dx + dz * dz <= splashSq) {
-      applyDamage(blot, proj);
+      applyDamage(blot, proj, timeS);
     }
   }
 }

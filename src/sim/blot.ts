@@ -31,6 +31,11 @@ export interface Blot extends PoolItem {
    *  rather than a countdown, so it composes with pause/catch-up the same way every
    *  other timestamp field in /sim does. 0 = never staggered. */
   staggeredUntilS: number;
+  /** Task 7.10: `render/blot.ts`'s hit-feedback (an ink splat + scale pop, GAME_DESIGN.md
+   *  §12) reads this the same way `effects.ts` reads Phrase's `lastFiredAtS` — set by
+   *  `collision.ts` whenever a projectile actually damages this Blot. `-Infinity` (not 0)
+   *  marks "never hit," since 0 is a legitimate `timeS` a Blot can be spawned and hit at. */
+  lastHitAtS: number;
 }
 
 export function createBlotPool(): Pool<Blot> {
@@ -44,6 +49,7 @@ export function createBlotPool(): Pool<Blot> {
     lobTimer: 0,
     stopped: false,
     staggeredUntilS: 0,
+    lastHitAtS: Number.NEGATIVE_INFINITY,
   }));
 }
 
@@ -59,6 +65,7 @@ export function spawnBlot(pool: Pool<Blot>, cls: BlotClass, x: number, z: number
   blot.lobTimer = 0;
   blot.stopped = false;
   blot.staggeredUntilS = 0;
+  blot.lastHitAtS = Number.NEGATIVE_INFINITY;
   return blot;
 }
 

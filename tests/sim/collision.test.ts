@@ -36,7 +36,7 @@ describe('resolveProjectileBlotCollisions', () => {
     const target = spawnBlot(blots, 'smudge', 0, 0);
     if (target === undefined) throw new Error('spawn failed');
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     expect(target.hp).toBeCloseTo(BALANCE.blot.smudge.hp - 5, 9);
     expect(projectiles.activeCount).toBe(0);
@@ -49,7 +49,7 @@ describe('resolveProjectileBlotCollisions', () => {
     const target = spawnBlot(blots, 'smudge', 0, BALANCE.collision.hitRadiusU * 5);
     if (target === undefined) throw new Error('spawn failed');
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     expect(target.hp).toBe(BALANCE.blot.smudge.hp);
     expect(projectiles.activeCount).toBe(1);
@@ -62,7 +62,7 @@ describe('resolveProjectileBlotCollisions', () => {
     const crust = spawnBlot(blots, 'crust', 0, 0);
     if (crust === undefined) throw new Error('spawn failed');
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     expect(crust.hp).toBeCloseTo(BALANCE.blot.crust.hp - 10 * BALANCE.strokes.hane.vsCrust, 9);
   });
@@ -74,7 +74,7 @@ describe('resolveProjectileBlotCollisions', () => {
     const first = spawnBlot(blots, 'smudge', 0, 0);
     if (first === undefined) throw new Error('spawn failed');
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
     expect(projectiles.activeCount).toBe(1); // still flying
     expect(proj.pierceRemaining).toBe(BALANCE.strokes.harai.pierceCount - 1);
     expect(first.hp).toBeCloseTo(BALANCE.blot.smudge.hp - 3, 9);
@@ -84,7 +84,7 @@ describe('resolveProjectileBlotCollisions', () => {
     const second = spawnBlot(blots, 'smudge', 0, 0);
     if (second === undefined) throw new Error('spawn failed');
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
     expect(projectiles.activeCount).toBe(0); // pierce budget exhausted
     expect(second.hp).toBeCloseTo(BALANCE.blot.smudge.hp - 3, 9);
   });
@@ -100,7 +100,7 @@ describe('resolveProjectileBlotCollisions', () => {
       throw new Error('spawn failed');
     }
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     expect(primary.hp).toBeLessThan(BALANCE.blot.smudge.hp);
     expect(inSplash.hp).toBeLessThan(BALANCE.blot.smudge.hp);
@@ -114,7 +114,7 @@ describe('resolveProjectileBlotCollisions', () => {
     spawnBlot(blots, 'smudge', 0, 0);
     spawnBlot(blots, 'smudge', 0.01, 0);
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     let damagedCount = 0;
     blots.forEachActive((b) => {
@@ -131,7 +131,7 @@ describe('resolveProjectileBlotCollisions', () => {
     if (dead === undefined) throw new Error('spawn failed');
     dead.hp = 0;
 
-    resolveProjectileBlotCollisions(projectiles, blots);
+    resolveProjectileBlotCollisions(projectiles, blots, 0);
 
     expect(dead.hp).toBe(0); // untouched, not driven further negative
     expect(projectiles.activeCount).toBe(1); // never "hit" anything

@@ -117,13 +117,23 @@ export class OffscreenLayers {
     this.actorsCtx.clearRect(0, 0, this.cssWidth, this.cssHeight);
   }
 
-  /** Composites all four layers, back to front, onto the real on-screen canvas. */
-  compositeInto(targetCtx: CanvasRenderingContext2D): void {
+  /**
+   * Composites all four layers, back to front, onto the real on-screen canvas.
+   * `shakeOffsetPx` (Task 7.10, GAME_DESIGN.md §12's camera shake) is applied as a
+   * translate around the 3D-scene layers only (sky/water, road+trail, actors) — never
+   * the persisting road+trail *canvas itself* (which would bake a different offset into
+   * its accumulated ink every frame, corrupting the trail rather than shaking the
+   * camera), and never HUD/vignette, which stay screen-locked the way a HUD normally does.
+   */
+  compositeInto(targetCtx: CanvasRenderingContext2D, shakeOffsetPx: { dx: number; dy: number } = { dx: 0, dy: 0 }): void {
     targetCtx.fillStyle = PALETTE.deep;
     targetCtx.fillRect(0, 0, this.cssWidth, this.cssHeight);
+    targetCtx.save();
+    targetCtx.translate(shakeOffsetPx.dx, shakeOffsetPx.dy);
     targetCtx.drawImage(this.skyWater, 0, 0, this.cssWidth, this.cssHeight);
     targetCtx.drawImage(this.roadTrail, 0, 0, this.cssWidth, this.cssHeight);
     targetCtx.drawImage(this.actors, 0, 0, this.cssWidth, this.cssHeight);
+    targetCtx.restore();
     targetCtx.drawImage(this.hud, 0, 0, this.cssWidth, this.cssHeight);
     this.drawVignette(targetCtx);
   }
