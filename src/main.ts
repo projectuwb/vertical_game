@@ -48,6 +48,7 @@ import { drawSeal, isRoadMarkingsErased } from './render/seal.js';
 import { drawInkBleed, drawInkTrail } from './render/trail.js';
 import { inkBleedFraction } from './render/hud.js';
 import { OffscreenLayers } from './render/layers.js';
+import { createAdaptiveQualityManager } from './render/quality.js';
 import { createTitleScreen } from './ui/screens/title.js';
 import { createSummaryScreen } from './ui/screens/summary.js';
 import { createInkstoneScreen } from './ui/screens/inkstone.js';
@@ -141,6 +142,13 @@ function bootstrap(): void {
   let lastCssWidth = initialMetrics.cssWidth;
   let lastCssHeight = initialMetrics.cssHeight;
   let lastDpr = initialMetrics.devicePixelRatio;
+
+  // Task 5.2, TECH_SPEC.md §8: degrades render-only detail (never simulation rate —
+  // `recordFrame` is only ever called from the `render` callback below, `update` never
+  // touches it) under sustained low real-world frame rate.
+  const quality = createAdaptiveQualityManager();
+  let lastRenderMs: number | null = null;
+  let renderFrameCount = 0;
 
   const storage = createStorage();
   let profile: Profile = loadProfile(storage);
@@ -311,6 +319,12 @@ function bootstrap(): void {
       music.setSealNear(world.seal !== null);
     },
     render: (_alpha: number): void => {
+      const nowRenderMs = nowMs();
+      if (lastRenderMs !== null) quality.recordFrame(nowRenderMs - lastRenderMs);
+      lastRenderMs = nowRenderMs;
+      renderFrameCount++;
+      const currentQuality = quality.current();
+
       const metrics = viewport.getMetrics();
       if (
         metrics.cssWidth !== lastCssWidth ||
@@ -342,7 +356,13 @@ function bootstrap(): void {
       }
 
       drawRoad(layers.roadTrailCtx, params, world.distanceU, isRoadMarkingsErased(world.seal));
-      drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
+      // TECH_SPEC.md §8's "trail resolution" degrade step: skip repainting the trail on
+      // some frames under sustained low fps rather than every frame — the road+trail
+      // layer never clears itself (it's a persisting accumulation, road.ts), so a
+      // skipped frame simply doesn't add fresh ink that frame, it doesn't leave a gap.
+      if (renderFrameCount % currentQuality.trailPaintEveryNthFrame === 0) {
+        drawInkTrail(layers.roadTrailCtx, params, brushX, BRUSH_Z, world.line, world.timeS);
+      }
 
       const deathElapsedS = deathAtRealMs === null ? 0 : (nowMs() - deathAtRealMs) / 1000;
       if (world.isDead) {
@@ -359,7 +379,7 @@ function bootstrap(): void {
       if (world.seal !== null) {
         drawSeal(layers.actorsCtx, metrics.cssWidth, metrics.cssHeight, params, world.seal, world.timeS);
       }
-      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line);
+      drawLine(layers.actorsCtx, params, brushX, BRUSH_Z, world.line, currentQuality);
       drawJoiningRecruits(layers.actorsCtx, params, world.joiningRecruitPool);
       drawProjectiles(layers.actorsCtx, params, world.projectilePool);
       drawPhraseEffects(layers.actorsCtx, params, world.phrase, brushX, BRUSH_Z, world.timeS);

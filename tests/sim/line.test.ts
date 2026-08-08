@@ -182,6 +182,22 @@ describe('classifyForRender', () => {
       expect(result.individualCount).toBe(BALANCE.line.individualRowsDrawn * BALANCE.line.rowSize);
     }
   });
+
+  // Task 5.2's adaptive quality manager (render/quality.ts) overrides these two
+  // thresholds under sustained low frame rate — never mutating the frozen BALANCE
+  // singleton itself, just passing lower numbers straight through.
+  it('honours an overridden rowThreshold/individualRows pair', () => {
+    const result = classifyForRender(50, 6, 2); // block threshold now 6 rows * rowSize, not 12
+    expect(result.hasDensityBlock).toBe(true);
+    expect(result.individualCount).toBe(2 * BALANCE.line.rowSize);
+  });
+
+  it('a totalCount at or below the overridden threshold still draws individually', () => {
+    const belowOverriddenThreshold = 6 * BALANCE.line.rowSize;
+    const result = classifyForRender(belowOverriddenThreshold, 6, 2);
+    expect(result.hasDensityBlock).toBe(false);
+    expect(result.individualCount).toBe(belowOverriddenThreshold);
+  });
 });
 
 describe('computeRowClassCounts', () => {

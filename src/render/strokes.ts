@@ -14,6 +14,7 @@ import type { JoiningRecruit, Slip } from '../sim/slips.js';
 import type { StrokeClass } from '../sim/stroke.js';
 import { isWetnessDry, type WetnessState } from '../sim/wetness.js';
 import { flourishChargeFraction, type FlourishState } from '../sim/flourish.js';
+import type { QualitySettings } from './quality.js';
 
 export const CLASS_COLOR: Record<StrokeClass, string> = {
   hane: PALETTE.jade,
@@ -45,8 +46,12 @@ export function drawLine(
   brushX: number,
   brushZ: number,
   line: LineState,
+  quality?: QualitySettings,
 ): void {
-  const classification = classifyForRender(line.strokes.length);
+  const classification =
+    quality === undefined
+      ? classifyForRender(line.strokes.length)
+      : classifyForRender(line.strokes.length, quality.densityBlockRowThreshold, quality.individualRowsDrawn);
   const individualCount = Math.min(classification.individualCount, line.strokes.length);
 
   // Index order (0 = front = farthest from camera among the Line's own rows) already
@@ -58,7 +63,7 @@ export function drawLine(
   }
 
   if (classification.hasDensityBlock) {
-    drawDensityBlock(ctx, params, brushX, brushZ, line, individualCount);
+    drawDensityBlock(ctx, params, brushX, brushZ, line, individualCount, quality?.stippleDotCount ?? STIPPLE_DOT_COUNT);
   }
 }
 
@@ -123,10 +128,16 @@ function drawDensityBlock(
   brushZ: number,
   line: LineState,
   individualCount: number,
+  stippleDotCount: number,
 ): void {
   const rowSize = BALANCE.line.rowSize;
-  const blockStartIndex = BALANCE.line.individualRowsDrawn * rowSize;
-  const farSlot = computeFormationSlot(blockStartIndex);
+  // The block always starts right where the individually-drawn glyphs stop — reading
+  // this from the actual `individualCount` passed in (rather than recomputing from
+  // `BALANCE.line.individualRowsDrawn`) is what makes the adaptive quality manager's
+  // reduced-row-count override (render/quality.ts) draw a seamless block instead of a
+  // gap or overlap where the row count it was actually called with differs from
+  // `BALANCE`'s own default.
+  const farSlot = computeFormationSlot(individualCount);
   const farZ = brushZ + farSlot.depthOffset;
 
   const overflowCount = line.strokes.length - individualCount;
@@ -153,7 +164,7 @@ function drawDensityBlock(
   const dominant = dominantClass(counts);
   fillQuad(ctx, corners, CLASS_COLOR[dominant]);
 
-  drawStipple(ctx, corners, counts, dominant);
+  drawStipple(ctx, corners, counts, dominant, stippleDotCount);
 }
 
 export function fillQuad(ctx: CanvasRenderingContext2D, corners: Quad, color: string): void {
@@ -193,6 +204,7 @@ function drawStipple(
   corners: Quad,
   counts: Record<StrokeClass, number>,
   dominant: StrokeClass,
+  dotCount: number,
 ): void {
   const minorityTotal = counts.hane + counts.tome + counts.harai - counts[dominant];
   if (minorityTotal === 0) return;
@@ -212,7 +224,7 @@ function drawStipple(
     (cls) => cls !== dominant && counts[cls] > 0,
   );
 
-  for (let i = 0; i < STIPPLE_DOT_COUNT; i++) {
+  for (let i = 0; i < dotCount; i++) {
     const x = minX + Math.random() * (maxX - minX);
     const y = minY + Math.random() * (maxY - minY);
 

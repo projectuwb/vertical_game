@@ -136,14 +136,25 @@ export interface RenderClassification {
  * GAME_DESIGN.md §5: above 60 Strokes (12 full rows), only the front 3 rows are drawn
  * as individual Strokes; the rest collapse into one density-block shape. Pure and
  * /render-agnostic — /render/strokes.ts decides how to actually draw each case.
+ *
+ * `rowThreshold`/`individualRows` default to `BALANCE.line`'s own values (every existing
+ * caller's behaviour is unchanged) but can be overridden — Task 5.2's adaptive quality
+ * manager (`render/quality.ts`) lowers them under sustained low frame rate, without ever
+ * mutating the frozen `BALANCE` singleton itself (Task 1.6's own test asserts it stays
+ * frozen) and without this being a gameplay change: which Strokes exist is untouched,
+ * only how many get drawn individually versus collapsed into the block mass.
  */
-export function classifyForRender(totalCount: number): RenderClassification {
-  const blockThresholdCount = BALANCE.line.rowSize * BALANCE.line.densityBlockRowThreshold;
+export function classifyForRender(
+  totalCount: number,
+  rowThreshold: number = BALANCE.line.densityBlockRowThreshold,
+  individualRows: number = BALANCE.line.individualRowsDrawn,
+): RenderClassification {
+  const blockThresholdCount = BALANCE.line.rowSize * rowThreshold;
   if (totalCount <= blockThresholdCount) {
     return { individualCount: totalCount, hasDensityBlock: false };
   }
   return {
-    individualCount: BALANCE.line.individualRowsDrawn * BALANCE.line.rowSize,
+    individualCount: individualRows * BALANCE.line.rowSize,
     hasDensityBlock: true,
   };
 }
