@@ -21,6 +21,7 @@ export function createTitleScreen(callbacks: {
   onBegin: () => void;
   onBeginDaily: () => void;
   onSettings: () => void;
+  onStatistics: () => void;
   onInstall: () => void;
   onDismissInstall: () => void;
 }): TitleScreen {
@@ -39,6 +40,10 @@ export function createTitleScreen(callbacks: {
   // default action (GAME_DESIGN.md §10's "two taps, under 3 seconds" loop is about the
   // ordinary path, not this one).
   const daily = createLinkButton('', callbacks.onBeginDaily);
+  // Task 7.3: grouped with Settings as the title screen's other secondary destination,
+  // rather than on the Settings screen itself — Statistics is player-facing content to
+  // look at, not a mutable setting, so it belongs alongside Title's other navigation.
+  const statistics = createLinkButton(STRINGS.title.statistics, callbacks.onStatistics);
   const settings = createLinkButton(STRINGS.title.settings, callbacks.onSettings);
 
   const installRow = document.createElement('div');
@@ -57,7 +62,7 @@ export function createTitleScreen(callbacks: {
   const installDismiss = createLinkButton(STRINGS.title.installDismiss, callbacks.onDismissInstall);
   installRow.append(installText, installAction, installDismiss);
 
-  content.append(heading, tagline, bestLine, begin, daily, settings, installRow);
+  content.append(heading, tagline, bestLine, begin, daily, statistics, settings, installRow);
 
   return {
     root,

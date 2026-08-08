@@ -57,6 +57,7 @@ import { createTitleScreen } from './ui/screens/title.js';
 import { createSummaryScreen } from './ui/screens/summary.js';
 import { createInkstoneScreen } from './ui/screens/inkstone.js';
 import { createSettingsScreen } from './ui/screens/settings.js';
+import { createStatisticsScreen } from './ui/screens/statistics.js';
 import type { AppState } from './ui/screens/run.js';
 import { setScreenVisible } from './ui/widgets.js';
 import { getMixer, resumeAudioContext } from './audio/synth.js';
@@ -230,6 +231,7 @@ function bootstrap(): void {
     setScreenVisible(summaryScreen.root, next === 'summary');
     setScreenVisible(inkstoneScreen.root, next === 'inkstone');
     setScreenVisible(settingsScreen.root, next === 'settings');
+    setScreenVisible(statisticsScreen.root, next === 'statistics');
   }
 
   // `dailySeed` (Task 7.1) is set only when entering via the title screen's Daily link —
@@ -344,6 +346,10 @@ function bootstrap(): void {
       refreshSettingsScreen();
       setAppState('settings');
     },
+    onStatistics: () => {
+      statisticsScreen.update(profile);
+      setAppState('statistics');
+    },
     onInstall: () => installPrompt.promptInstall(),
     onDismissInstall: () => installPrompt.dismiss(),
   });
@@ -382,7 +388,11 @@ function bootstrap(): void {
     },
   });
 
-  app.append(titleScreen.root, summaryScreen.root, inkstoneScreen.root, settingsScreen.root);
+  const statisticsScreen = createStatisticsScreen({
+    onBack: () => setAppState('title'),
+  });
+
+  app.append(titleScreen.root, summaryScreen.root, inkstoneScreen.root, settingsScreen.root, statisticsScreen.root);
   titleScreen.update(profile);
   setAppState('title');
 
@@ -517,13 +527,13 @@ function bootstrap(): void {
   // exit from a Passage)." The `backButton` event only ever fires inside a real Android
   // WebView (Capacitor's own web implementation of `@capacitor/app` never dispatches it
   // in a plain browser), so this is inert everywhere else without needing its own guard.
-  // Settings is the one screen with a real in-app "back" target (Title); everywhere else
-  // there's nowhere further back to go *within* the app, so the choice is minimize
-  // (mid-Passage — preserves World state entirely, the "pause" this task asks for) or
-  // exit (every other screen — profile progress is already saved by the time any of
-  // them can be showing, so there's nothing to lose).
+  // Settings and Statistics (Task 7.3) are the two screens with a real in-app "back"
+  // target (Title); everywhere else there's nowhere further back to go *within* the
+  // app, so the choice is minimize (mid-Passage — preserves World state entirely, the
+  // "pause" this task asks for) or exit (every other screen — profile progress is
+  // already saved by the time any of them can be showing, so there's nothing to lose).
   App.addListener('backButton', () => {
-    if (appState === 'settings') {
+    if (appState === 'settings' || appState === 'statistics') {
       setAppState('title');
     } else if (appState === 'playing') {
       App.minimizeApp();
