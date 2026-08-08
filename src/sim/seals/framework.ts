@@ -14,7 +14,9 @@
 // mechanic is drawing from.
 
 import type { RngRegistry } from '../../core/rng.js';
+import type { Pool } from '../../core/pool.js';
 import { BALANCE } from '../config.js';
+import type { Blot } from '../blot.js';
 
 export type SealStatus = 'approaching' | 'fighting' | 'broken';
 
@@ -47,6 +49,11 @@ export interface SealStepContext {
   readonly brushX: number;
   readonly brushZ: number;
   readonly rng: RngRegistry;
+  /** For attacks that summon Blot (The Press's "8 Smudges per slam," GAME_DESIGN.md
+   *  §8.2) — bosses mutate this directly via `spawnBlot`, the same pool-mutation idiom
+   *  every other spawn site in /sim already uses, rather than the framework routing
+   *  spawn requests through yet another indirection layer. */
+  readonly blotPool: Pool<Blot>;
 }
 
 export interface SealBossStepResult<TBossState> {

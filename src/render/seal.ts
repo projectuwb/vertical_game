@@ -9,8 +9,10 @@ import { PALETTE } from './palette.js';
 import { fillQuad, type Quad } from './strokes.js';
 import { stubActiveTelegraph } from '../sim/seals/stub.js';
 import { smearActiveVisual } from '../sim/seals/smear.js';
+import { pressActiveVisual } from '../sim/seals/press.js';
 import type { SealEncounterState } from '../sim/seals/framework.js';
 import { computeSealZ, SEAL_X } from '../sim/world.js';
+import { BALANCE } from '../sim/config.js';
 
 const BODY_HALF_WIDTH_U = 1.5;
 const BODY_HEIGHT_U = 2.4;
@@ -155,6 +157,50 @@ function drawSmearVisual(ctx: CanvasRenderingContext2D, params: ProjectionParams
   ctx.restore();
 }
 
+const PRESS_ZONE_NEAR_Z = -0.4;
+const PRESS_ZONE_FAR_Z = 8;
+const PRESS_LANE_HALF_WIDTH_U = BALANCE.lane.halfWidth;
+
+/**
+ * The Press's slam: "outside the ring or in the one gap in it," reinterpreted for a
+ * lane with no radial dimension as "everywhere except a gap window is dangerous." Each
+ * active ring (one normally, two in phase 2) is drawn as the lane *minus its own gap* —
+ * two flanking quads either side of the gap — at a translucent alpha, so a single ring's
+ * danger reads as one wash, and phase 2's two overlapping rings compound into visibly
+ * darker vermilion everywhere except the shared safe gap, without any special-casing.
+ */
+function drawPressVisual(ctx: CanvasRenderingContext2D, params: ProjectionParams, seal: SealEncounterState): void {
+  const visual = pressActiveVisual(seal.bossState);
+  if (visual === null) return;
+
+  const alpha = 0.22 + 0.28 * visual.progressFraction; // brightens toward resolution, like the Smear
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (const gapCenter of visual.gapCenters) {
+    const gapMin = gapCenter - visual.gapHalfWidthU;
+    const gapMax = gapCenter + visual.gapHalfWidthU;
+    if (gapMin > -PRESS_LANE_HALF_WIDTH_U) {
+      const quad: Quad = [
+        project(-PRESS_LANE_HALF_WIDTH_U, 0, PRESS_ZONE_NEAR_Z, params),
+        project(gapMin, 0, PRESS_ZONE_NEAR_Z, params),
+        project(gapMin, 0, PRESS_ZONE_FAR_Z, params),
+        project(-PRESS_LANE_HALF_WIDTH_U, 0, PRESS_ZONE_FAR_Z, params),
+      ];
+      fillQuad(ctx, quad, PALETTE.vermilion);
+    }
+    if (gapMax < PRESS_LANE_HALF_WIDTH_U) {
+      const quad: Quad = [
+        project(gapMax, 0, PRESS_ZONE_NEAR_Z, params),
+        project(PRESS_LANE_HALF_WIDTH_U, 0, PRESS_ZONE_NEAR_Z, params),
+        project(PRESS_LANE_HALF_WIDTH_U, 0, PRESS_ZONE_FAR_Z, params),
+        project(gapMax, 0, PRESS_ZONE_FAR_Z, params),
+      ];
+      fillQuad(ctx, quad, PALETTE.vermilion);
+    }
+  }
+  ctx.restore();
+}
+
 function drawBossAttackVisual(
   ctx: CanvasRenderingContext2D,
   params: ProjectionParams,
@@ -165,6 +211,8 @@ function drawBossAttackVisual(
     drawStubTelegraph(ctx, params, seal, timeS);
   } else if (seal.definitionId === 'smear') {
     drawSmearVisual(ctx, params, seal);
+  } else if (seal.definitionId === 'press') {
+    drawPressVisual(ctx, params, seal);
   }
 }
 

@@ -255,7 +255,32 @@ const balance = {
       sweepDurationS: 1.2,
       attackIntervalS: 2.5,
     },
-    press: { phases: 3, summonPerSlamCount: 8 },
+    // phases/summonPerSlamCount are named exactly in GAME_DESIGN.md §8.2. The rest
+    // reinterpret "a shockwave ring; you must be outside the ring or in the one gap in
+    // it" for a game with only lateral (1D) player movement: the ring becomes "the
+    // whole lane is dangerous except a gapHalfWidthU-wide window," which is the direct
+    // 1D analogue of "outside the ring or in the gap" — there is no radial dimension to
+    // be "outside" in, so the gap is the only safe answer, exactly as spec intends.
+    // slamTelegraphS (1.0s) sits comfortably above the 0.7s framework floor, giving a
+    // beat of reaction room consistent with "deliberately learnable, deliberately
+    // musical." gapHalfWidthU (1.25u, a 2.5u-wide safe window against a 9u lane) is
+    // sized to be confidently reachable in one slamTelegraphS from anywhere in the lane
+    // at the Brush's normal lateral speed, without being so wide it trivialises the
+    // read. attackIntervalS (2.2s) is deliberately a hair tighter than the Smear's 2.5s
+    // — the Press is meant to feel more mechanical/hammering by contrast. beatGapS
+    // (0.6s) is phase 3's "2-beat rhythm": the pause between the first slam's resolve
+    // and the second slam's own full telegraph, short enough to read as one musical
+    // phrase rather than two unrelated attacks, while the second slam still gets its
+    // own complete slamTelegraphS so it's never a bare reflex check. Logged in
+    // DECISIONS.md.
+    press: {
+      phases: 3,
+      summonPerSlamCount: 8,
+      slamTelegraphS: 1.0,
+      gapHalfWidthU: 1.25,
+      attackIntervalS: 2.2,
+      beatGapS: 0.6,
+    },
     blank: { phases: 4, eraseDurationS: 3 },
   },
 

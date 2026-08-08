@@ -11,13 +11,14 @@ import {
   type SealStepContext,
 } from '../../src/sim/seals/framework.js';
 import { STUB_SEAL_DEFINITION, stubActiveTelegraph } from '../../src/sim/seals/stub.js';
+import { createBlotPool } from '../../src/sim/blot.js';
 import { computeSealZ, createWorld, startSealEncounter, stepWorld, type WorldInput } from '../../src/sim/world.js';
 
 const DT = 1 / 60;
 const NO_INPUT: WorldInput = { lateralDelta: 0, holding: false };
 
 function makeCtx(overrides: Partial<SealStepContext> = {}): SealStepContext {
-  return { dt: DT, timeS: 0, brushX: 0, brushZ: 0, rng: new RngRegistry(1), ...overrides };
+  return { dt: DT, timeS: 0, brushX: 0, brushZ: 0, rng: new RngRegistry(1), blotPool: createBlotPool(), ...overrides };
 }
 
 describe('computeSealMaxHp', () => {

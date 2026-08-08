@@ -27,6 +27,7 @@ import { spawnSealstack } from './sim/sealstacks.js';
 import { computeGoldLeaf, createWorld, startSealEncounter, stepWorld, type World } from './sim/world.js';
 import { STUB_SEAL_DEFINITION } from './sim/seals/stub.js';
 import { SMEAR_SEAL_DEFINITION } from './sim/seals/smear.js';
+import { PRESS_SEAL_DEFINITION } from './sim/seals/press.js';
 import { RngRegistry } from './core/rng.js';
 import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
@@ -305,6 +306,10 @@ function bootstrap(): void {
       if (e.code === 'KeyM') {
         // Task 3.2's debug hook: starts The Smear (the first real boss) at sealIndex 0.
         startSealEncounter(world, 0, SMEAR_SEAL_DEFINITION);
+      }
+      if (e.code === 'KeyN') {
+        // Task 3.3's debug hook: starts The Press at sealIndex 0.
+        startSealEncounter(world, 0, PRESS_SEAL_DEFINITION);
       }
     });
   }

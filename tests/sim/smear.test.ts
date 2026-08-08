@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RngRegistry } from '../../src/core/rng.js';
+import { createBlotPool } from '../../src/sim/blot.js';
 import { BALANCE } from '../../src/sim/config.js';
 import type { SealStepContext } from '../../src/sim/seals/framework.js';
 import { SMEAR_SEAL_DEFINITION, smearActiveVisual } from '../../src/sim/seals/smear.js';
@@ -9,7 +10,7 @@ const DT = 1 / 60;
 const NO_INPUT: WorldInput = { lateralDelta: 0, holding: false };
 
 function makeCtx(overrides: Partial<SealStepContext> = {}): SealStepContext {
-  return { dt: DT, timeS: 0, brushX: 0, brushZ: 0, rng: new RngRegistry(1), ...overrides };
+  return { dt: DT, timeS: 0, brushX: 0, brushZ: 0, rng: new RngRegistry(1), blotPool: createBlotPool(), ...overrides };
 }
 
 /** Fast-forwards a World's Seal encounter past the 6s approach, into 'fighting'. */

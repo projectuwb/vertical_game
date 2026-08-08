@@ -373,7 +373,14 @@ export function stepWorld(world: World, dtFixed: number, input: WorldInput): voi
     const sealZ = computeSealZ(world.seal);
     world.seal = resolveProjectileSealCollisions(world.projectilePool, world.seal, SEAL_X, sealZ);
 
-    const sealCtx = { dt: dtFixed, timeS: world.timeS, brushX, brushZ: BRUSH_Z, rng: world.rng };
+    const sealCtx = {
+      dt: dtFixed,
+      timeS: world.timeS,
+      brushX,
+      brushZ: BRUSH_Z,
+      rng: world.rng,
+      blotPool: world.blotPool,
+    };
     const sealStep = stepSealEncounter(world.seal, world.sealDefinition, sealCtx);
     world.seal = sealStep.seal;
     if (sealStep.strokesLost > 0) {
