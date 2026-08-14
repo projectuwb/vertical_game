@@ -29,19 +29,21 @@ Never mark a task done with failing tests, a broken build, or `// TODO` stubs st
 
 ## Git workflow — read this carefully
 
-**Work on one branch, always: `claude/build`.**
+**Work directly on `main`. No other branch. No pull requests.**
 
-At the start of every session: `git fetch origin`, then check out `claude/build` if it exists remotely, or create it from the default branch if it doesn't. Never create a new per-session branch. Never work on the default branch. Never open a pull request.
+At the start of every session: `git fetch origin && git checkout main && git pull`. Never create a per-session or feature branch. Never open a pull request.
+
+Run `npm run verify` before every commit — this is what keeps `main` from ever failing `npm run build`.
 
 **Push after every single task**, immediately after the commit:
 
 ```
-git push origin claude/build
+git push origin main
 ```
 
 This is not optional and it is not a convenience. The user's Vercel deployment is wired to this exact branch, so every push is a live deploy they can play on their phone. A task that is committed but not pushed is invisible to them. If a push is rejected, pull with rebase and push again.
 
-Because every push deploys, **`claude/build` must never be left in a state that fails `npm run build`.** `npm run verify` before every commit is what protects this. If you somehow push a broken build, fixing it is the immediate next task, ahead of everything else in `TASKS.md`.
+Because every push deploys, **`main` must never be left in a state that fails `npm run build`.** `npm run verify` before every commit is what protects this. If you somehow push a broken build, fixing it is the immediate next task, ahead of everything else in `TASKS.md`.
 
 Do not ask the user to merge anything. Do not ask them to review a diff. Do not wait for approval between tasks.
 
@@ -49,7 +51,7 @@ Do not ask the user to merge anything. Do not ask them to review a diff. Do not 
 
 If this is a fresh session (the user says "continue", or anything short and contextless):
 
-0. You work on `claude/build` and nowhere else (see the Git workflow section above). Fetch it and check it out before anything else. If the working directory looks empty, that is because you are on the wrong branch — run `git branch -a` and `git log --all --oneline` before ever concluding there is no prior work. Restarting the build from scratch over a branch mix-up is the worst failure available to you.
+0. You work on `main` and nowhere else (see the Git workflow section above). Run `git fetch origin && git checkout main && git pull` before anything else. If the working directory looks empty, that is because you are on the wrong branch — run `git branch -a` and `git log --all --oneline` before ever concluding there is no prior work. Restarting the build from scratch over a branch mix-up is the worst failure available to you.
 1. Read `CLAUDE.md`, `PROGRESS.md`, then `TASKS.md`.
 2. Run `git log --oneline -15` and `npm run verify` to confirm the tree is healthy.
 3. Identify the first unticked task. If the working tree has uncommitted changes, finish and commit that task first.
