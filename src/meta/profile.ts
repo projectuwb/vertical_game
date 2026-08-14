@@ -46,10 +46,21 @@ export const INKSTONE_TRACK_IDS: readonly InkstoneTrackId[] = [
   'secondDraft',
 ];
 
+/** Mirrors `render/palette.ts`'s `PaletteVariantId` exactly — duplicated, not imported,
+ *  because this file also compiles under `tsconfig.cli.json`'s Node-only program (the
+ *  balance harness's `metaProgression.ts` imports `Profile`), which doesn't include
+ *  /render at all (TECH_SPEC.md §3's browser-vs-Node-CLI boundary — the same reason
+ *  `build/checkColorblind.ts` duplicates render geometry instead of importing it). If
+ *  Task 7.5 ever adds another variant, both this list and `render/palette.ts`'s own are
+ *  the two places to update. */
+export type PaletteVariantId = 'default' | 'nocturne' | 'vermeil';
+const PALETTE_VARIANT_IDS: readonly PaletteVariantId[] = ['default', 'nocturne', 'vermeil'];
+
 export interface ProfileSettings {
   readonly muted: boolean;
   readonly shapesOnly: boolean;
   readonly reducedMotion: boolean;
+  readonly paletteVariant: PaletteVariantId;
 }
 
 export interface RunHistoryEntry {
@@ -89,7 +100,7 @@ export function createDefaultProfile(): Profile {
     bestPeakLine: 0,
     totalSealsBroken: 0,
     totalPassages: 0,
-    settings: { muted: false, shapesOnly: false, reducedMotion: false },
+    settings: { muted: false, shapesOnly: false, reducedMotion: false, paletteVariant: 'default' },
     runHistory: [],
   };
 }
@@ -143,6 +154,9 @@ function sanitizeProfile(data: VersionedData): Profile {
         typeof raw.settings?.reducedMotion === 'boolean'
           ? raw.settings.reducedMotion
           : fallback.settings.reducedMotion,
+      paletteVariant: PALETTE_VARIANT_IDS.includes(raw.settings?.paletteVariant as PaletteVariantId)
+        ? (raw.settings?.paletteVariant as PaletteVariantId)
+        : fallback.settings.paletteVariant,
     },
     runHistory: Array.isArray(raw.runHistory) ? raw.runHistory.slice(-RUN_HISTORY_CAP) : fallback.runHistory,
   };

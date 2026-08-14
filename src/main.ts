@@ -45,6 +45,7 @@ import { RngRegistry } from './core/rng.js';
 import { nowMs } from './core/time.js';
 import type { Pool } from './core/pool.js';
 import { computeProjectionParams } from './render/camera.js';
+import { setPaletteVariant } from './render/palette.js';
 import { drawGatePair, drawRoad, drawSealstacks, drawSkyWater, resetRoadTrailBase } from './render/road.js';
 import { drawBrush, drawJoiningRecruits, drawLine, drawProjectiles, drawSlips } from './render/strokes.js';
 import { drawBlot } from './render/blot.js';
@@ -209,6 +210,9 @@ function bootstrap(): void {
   // World's own fresh event bus inside `beginPassage`.
   const mixer = getMixer();
   mixer.setMuted(profile.settings.muted);
+  // Task 7.5: applies the persisted palette choice from the very first frame, same
+  // "load once at bootstrap, re-apply on every settings change" shape as `setMuted` above.
+  setPaletteVariant(profile.settings.paletteVariant);
   const music = createMusicController(mixer);
   attachSfx(world.events);
   attachFlourishHaptics(world.events);
@@ -403,12 +407,14 @@ function bootstrap(): void {
       profile = { ...profile, settings };
       saveProfile(storage, profile);
       mixer.setMuted(profile.settings.muted); // "Mute persists" (GAME_DESIGN.md §12) — and applies immediately
+      setPaletteVariant(profile.settings.paletteVariant);
       refreshSettingsScreen(); // keeps the live export blob in sync with the toggle just flipped
     },
     onImport: (imported: Profile) => {
       profile = imported;
       saveProfile(storage, profile);
       mixer.setMuted(profile.settings.muted);
+      setPaletteVariant(profile.settings.paletteVariant);
       refreshSettingsScreen();
     },
   });

@@ -7,10 +7,12 @@
 
 import type { Profile, ProfileSettings } from '../../meta/profile.js';
 import { exportProfile, importProfile } from '../../meta/profile.js';
+import { isPaletteVariantUnlocked, paletteVariantUnlockLabel, PALETTE_VARIANT_IDS } from '../../render/palette.js';
 import { STRINGS } from '../strings.js';
 import {
   createButton,
   createHeading,
+  createOptionRow,
   createParagraph,
   createScreenOverlay,
   createTextArea,
@@ -40,6 +42,12 @@ export function createSettingsScreen(callbacks: {
   persistenceWarning.style.color = 'inherit';
 
   const togglesHost = document.createElement('div');
+  // Task 7.5: palette variants unlocked by milestones.
+  const paletteHeading = createParagraph(STRINGS.settings.paletteHeading);
+  const paletteHost = document.createElement('div');
+  paletteHost.style.display = 'flex';
+  paletteHost.style.flexDirection = 'column';
+  paletteHost.style.gap = '8px';
   const seedLine = createParagraph('');
 
   const exportLabel = createParagraph(STRINGS.settings.exportLabel);
@@ -67,6 +75,8 @@ export function createSettingsScreen(callbacks: {
     heading,
     persistenceWarning,
     togglesHost,
+    paletteHeading,
+    paletteHost,
     seedLine,
     exportLabel,
     exportHint,
@@ -99,6 +109,18 @@ export function createSettingsScreen(callbacks: {
           checked: data.profile.settings.reducedMotion,
           onChange: (checked) => callbacks.onSettingChange({ ...data.profile.settings, reducedMotion: checked }),
         }),
+      );
+
+      const unlockStats = { bestDistanceU: data.profile.bestDistanceU, totalSealsBroken: data.profile.totalSealsBroken };
+      paletteHost.replaceChildren(
+        ...PALETTE_VARIANT_IDS.map((id) =>
+          createOptionRow({
+            name: STRINGS.settings.paletteName[id],
+            lockedReason: isPaletteVariantUnlocked(id, unlockStats) ? null : paletteVariantUnlockLabel(id),
+            selected: data.profile.settings.paletteVariant === id,
+            onSelect: () => callbacks.onSettingChange({ ...data.profile.settings, paletteVariant: id }),
+          }),
+        ),
       );
 
       seedLine.textContent = data.lastSeed === null ? '' : `${STRINGS.settings.seedLabel}: ${data.lastSeed}`;

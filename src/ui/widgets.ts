@@ -221,6 +221,55 @@ export function createTrackRow(opts: TrackRowOptions): HTMLButtonElement {
   return row;
 }
 
+export interface OptionRowOptions {
+  readonly name: string;
+  /** Shown selected/inert either way — `null` when unlocked (nothing to explain),
+   *  a requirement string when locked (Task 7.5: palette variants). */
+  readonly lockedReason: string | null;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}
+
+/** A single row in a small set of mutually-exclusive named choices — same
+ *  selectable/inert-when-unavailable shape as `createTrackRow`'s buy row, generalised
+ *  for "pick one of these" rather than "spend Gold Leaf on this." Task 7.5's palette
+ *  variant picker is the first user; written generically enough for a future one. */
+export function createOptionRow(opts: OptionRowOptions): HTMLButtonElement {
+  const unlocked = opts.lockedReason === null;
+  const canSelect = unlocked && !opts.selected;
+  const row = el('button', {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    width: '100%',
+    minHeight: '44px',
+    boxSizing: 'border-box',
+    padding: '12px 14px',
+    borderRadius: '8px',
+    border: `1px solid ${opts.selected ? PALETTE.goldLeaf : unlocked ? PALETTE.bone + '55' : PALETTE.bone + '22'}`,
+    background: opts.selected ? PALETTE.goldLeaf + '14' : 'transparent',
+    color: PALETTE.bone,
+    fontFamily: UI_FONT_STACK,
+    textAlign: 'left',
+    cursor: canSelect ? 'pointer' : 'default',
+    opacity: unlocked ? '1' : '0.5',
+  });
+  row.disabled = !canSelect;
+
+  const topLine = el('div', { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' });
+  const nameEl = el('span', { fontWeight: '700', fontSize: '16px' });
+  nameEl.textContent = opts.name;
+  const stateEl = el('span', { fontSize: '13px', color: opts.selected ? PALETTE.goldLeaf : PALETTE.bone, opacity: '0.8' });
+  stateEl.textContent = opts.selected ? 'Selected' : unlocked ? '' : (opts.lockedReason as string);
+  topLine.append(nameEl, stateEl);
+
+  row.append(topLine);
+  row.addEventListener('click', () => {
+    if (canSelect) opts.onSelect();
+  });
+  return row;
+}
+
 export interface ToggleRowOptions {
   readonly label: string;
   readonly checked: boolean;

@@ -5,7 +5,7 @@
 
 import type { ProjectionParams } from './camera.js';
 import { project, type ProjectedPoint } from './projection.js';
-import { PALETTE } from './palette.js';
+import { onPaletteChange, PALETTE } from './palette.js';
 import { BALANCE } from '../sim/config.js';
 import { classifyForRender, computeFormationSlot, type LineState } from '../sim/line.js';
 import type { Pool } from '../core/pool.js';
@@ -21,6 +21,14 @@ export const CLASS_COLOR: Record<StrokeClass, string> = {
   tome: PALETTE.vermilion,
   harai: PALETTE.bone,
 };
+// Task 7.5: re-derive in place after a palette-variant swap — see palette.ts's header
+// comment for why this listener pattern exists instead of computing CLASS_COLOR live
+// from PALETTE on every read.
+onPaletteChange(() => {
+  CLASS_COLOR.hane = PALETTE.jade;
+  CLASS_COLOR.tome = PALETTE.vermilion;
+  CLASS_COLOR.harai = PALETTE.bone;
+});
 
 // Render-only cosmetic constants — not gameplay balance, so not in /sim/config.ts.
 const SILHOUETTE_BASE_SIZE_U = 0.4;

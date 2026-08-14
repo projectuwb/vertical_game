@@ -3,6 +3,7 @@
 // future localisation pass would touch first.
 
 import type { DeathCause } from '../sim/world.js';
+import type { PaletteVariantId } from '../render/palette.js';
 
 export const STRINGS = {
   title: {
@@ -60,6 +61,12 @@ export const STRINGS = {
     importFailed: 'That doesn’t look like a valid INKFALL profile.',
     importSucceeded: 'Profile imported.',
     back: 'Back',
+    paletteHeading: 'Palette',
+    paletteName: {
+      default: 'Default',
+      nocturne: 'Nocturne',
+      vermeil: 'Vermeil',
+    } satisfies Record<PaletteVariantId, string>,
   },
   statistics: {
     heading: 'Statistics',

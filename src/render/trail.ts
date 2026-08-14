@@ -10,7 +10,7 @@
 
 import type { ProjectionParams } from './camera.js';
 import { project, type ProjectedPoint } from './projection.js';
-import { PALETTE } from './palette.js';
+import { onPaletteChange, PALETTE } from './palette.js';
 import { CLASS_COLOR } from './strokes.js';
 import type { LineState } from '../sim/line.js';
 import type { StrokeClass } from '../sim/stroke.js';
@@ -48,6 +48,15 @@ const CLASS_RGB: Record<StrokeClass, readonly [number, number, number]> = {
   tome: hexToRgb(CLASS_COLOR.tome),
   harai: hexToRgb(CLASS_COLOR.harai),
 };
+// Task 7.5: re-derive in place after a palette-variant swap — registered after
+// strokes.ts's own listener runs (module import order: this file imports CLASS_COLOR
+// from strokes.js, so strokes.js's top-level code, including its listener registration,
+// always finishes first), so CLASS_COLOR is already updated by the time this reads it.
+onPaletteChange(() => {
+  CLASS_RGB.hane = hexToRgb(CLASS_COLOR.hane);
+  CLASS_RGB.tome = hexToRgb(CLASS_COLOR.tome);
+  CLASS_RGB.harai = hexToRgb(CLASS_COLOR.harai);
+});
 
 /** Exported for Task 7.4's `render/scroll.ts` (the photo-mode trail reconstruction),
  *  which needs the exact same width-from-Line-size formula this module already uses —
