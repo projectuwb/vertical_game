@@ -100,7 +100,44 @@ button. I did not personally sit through Reduce Motion's trail-wobble difference
 by frame (it's a per-frame animation difference, hard to assess from static screenshots)
 — logged here as unverified-by-eye rather than claimed.
 
-## What's missing that I can feel the absence of
+## Update after Phase 7
+
+Everything below this point was written after Task 5.4 landed, before Phase 7's polish
+pass. Phase 7 (7.1-7.11) is now fully complete, and two things in the "missing" and
+"balance" sections above have since changed — recorded here rather than rewritten in
+place, so the history of what got fixed stays visible.
+
+**The camera-shake/hit-feedback gap is closed.** Task 7.10 built exactly what
+GAME_DESIGN.md §12 describes: shake on Seal impacts and Flourish only (≤4px, ≤180ms,
+halved not removed under Reduce Motion), plus an ink-splat/scale-pop on Blot hits.
+Re-ran a real headless-Chromium session this pass (production build, `?debug=1`, a
+120-Line, a 900-Blot wave, a real held-then-released Flourish) after all of Phase 7's
+other changes landed — zero console errors through sustained heavy combat and a real
+Flourish release, confirming nothing since Task 7.10 regressed it. I did not re-do
+Task 7.10's own frame-by-frame pixel measurement of the shake amplitude (that
+verification, plus dedicated unit tests pinning the exact math, already exists and
+didn't need repeating); this pass is a no-regression check, not a re-derivation.
+
+**Balance is unchanged, still honestly FAIL on two rows.** Task 7.9 tried the one
+concrete lever Task 4.6b identified (decoupling each Seal boss's own attack damage from
+the shared ordinary-Blot-contact constant) and confirmed empirically it doesn't move
+"First Seal reached" — that number tracks how much zero-upgrades DPS a run has *before*
+ever meeting a Seal, which per-boss attack tuning structurally cannot touch. Current
+`BALANCE_REPORT.md`: **Strategy dominance** 24.7% vs ≤20% target (unchanged), **First
+Seal reached** 38.1% vs ≥70% target (unchanged, within noise of the 38.0% figure below).
+Three independent tuning attempts across Tasks 4.6/4.6b/7.9 have now converged on the
+same conclusion: this needs a lever no session has tried yet (see DECISIONS.md), not
+another sweep of the ones already tried.
+
+Also new since the section below was written: **Gate numbers now actually render**
+(Task 7.11 — discovered mid-Phase-7 that GAME_DESIGN.md §12's "Gate numbers are the
+loudest type in the game" text described rendering that had never been built; gates
+were plain coloured quads with no readable number at all). That's a real improvement to
+the specific "Gates are the sharpest edge I hit" moment described below — a player now
+has an actual number to read in the ~0.7s before a Gate pair resolves, not just two
+identical-looking doors.
+
+## What's missing that I can feel the absence of (as of Task 5.4, before Phase 7)
 
 GAME_DESIGN.md §12 describes camera shake (Seal impacts, Flourish) and an ink-splat-
 plus-scale-pop hit-feedback system that, as discovered during Task 5.3, no earlier task
@@ -110,6 +147,8 @@ punctuation beyond the ordinary silhouettes changing — functional, readable, b
 noticeably flatter than GAME_DESIGN.md's own described feel. This is the single biggest
 gap between "what the design document describes" and "what a hand currently feels,"
 more than any remaining balance number.
+
+**This gap is now closed — see "Update after Phase 7" above.**
 
 ## Specific timings, gathered
 
@@ -132,8 +171,9 @@ more than any remaining balance number.
 
 The core loop is legible and fast to enter; movement and firing read clearly; the
 colourblind/greyscale requirement genuinely holds up under direct testing, not just by
-design. The biggest real gaps are the ones already tracked honestly elsewhere: Seal
-encounters are still out of reach for most zero-upgrades runs (Task 4.6b, Task 7.9), and
-the game is missing the camera-shake/hit-feedback layer its own design document
-describes (Task 7.10). Neither is invisible in play — both are worth a dedicated pass
-before calling the feel "finished," not just the checklist.
+design. Phase 7 closed the camera-shake/hit-feedback gap (Task 7.10) and the unreadable-
+Gate-number gap (Task 7.11) this document originally flagged — both verified, not just
+claimed fixed. The one real gap left is the one three independent tuning attempts
+(Tasks 4.6, 4.6b, 7.9) haven't closed: most zero-upgrades runs still end before ever
+reaching a Seal. That's tracked honestly as a FAIL in `BALANCE_REPORT.md`, not rounded
+up, and is the single item standing between this build and a clean §11 pass.
